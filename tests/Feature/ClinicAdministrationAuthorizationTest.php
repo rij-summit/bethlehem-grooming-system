@@ -521,7 +521,7 @@ class ClinicAdministrationAuthorizationTest extends TestCase
         $this->postJson('/api/admin/clinic-appointments/3/check-in')->assertOk()->assertJsonPath('appointment.queue_number', 1);
     }
 
-    public function test_active_outpatients_are_today_only_with_payment_and_confinement_in_separate_lists(): void
+    public function test_unfinished_outpatients_remain_visible_with_payment_and_confinement_in_separate_lists(): void
     {
         $this->authenticateAs('admin');
         foreach ([1 => 'checked_in', 2 => 'in_consultation', 3 => 'for_payment', 4 => 'completed',
@@ -547,7 +547,7 @@ class ClinicAdministrationAuthorizationTest extends TestCase
                 'clinic_appointment_id' => 8, 'clinic_case_service_id' => $entryId, 'admitted_at' => now()->subDay(), 'reason' => 'Observe overnight',
             ]);
             $response = $this->getJson('/api/admin/clinic-cases')->assertOk()->assertJsonPath('confined_count', 1);
-            $this->assertEqualsCanonicalizing([3, 5, 6], array_column($response->json('cases'), 'id'));
+            $this->assertEqualsCanonicalizing([1, 2, 3, 5, 6], array_column($response->json('cases'), 'id'));
             $this->getJson('/api/admin/clinic-confinements')->assertOk()->assertJsonPath('data.0.id', 8);
             $this->assertDatabaseCount('clinic_appointments', 8);
         } finally {
@@ -2661,6 +2661,7 @@ class ClinicAdministrationAuthorizationTest extends TestCase
     public function test_every_clinic_administration_route_has_the_expected_role_middleware(): void
     {
         $expected = [
+            ['GET', 'api/admin/pets/{petId}/clinic-case', 'role:admin,staff'],
             ['POST', 'api/admin/clinic-walk-in', 'role:admin,staff'],
             ['GET', 'api/admin/clinic-records', 'role:admin,staff'],
             ['GET', 'api/admin/clinic-services/options', 'role:admin,staff'],
@@ -2726,7 +2727,8 @@ class ClinicAdministrationAuthorizationTest extends TestCase
         }
 
         $allClinicAdministrationRoutes = $routes->filter(
-            fn (RoutingRoute $route) => str_starts_with($route->uri(), 'api/admin/clinic'),
+            fn (RoutingRoute $route) => str_starts_with($route->uri(), 'api/admin/clinic')
+                || $route->uri() === 'api/admin/pets/{petId}/clinic-case',
         );
 
         $this->assertCount(count($expected), $allClinicAdministrationRoutes);
@@ -2735,7 +2737,7 @@ class ClinicAdministrationAuthorizationTest extends TestCase
             fn (RoutingRoute $route) => str_starts_with($route->getActionName(), AdminClinicController::class.'@'),
         );
 
-        $this->assertCount(18, $adminClinicRoutes);
+        $this->assertCount(19, $adminClinicRoutes);
         $adminClinicRoutes->each(function (RoutingRoute $route): void {
             $this->assertContains('role:admin,staff', $route->gatherMiddleware());
         });

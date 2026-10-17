@@ -12,7 +12,7 @@ import {
   getGroomingPricePresentation,
   formatPriceOption,
   getPackageById,
-} from "../services/grooming-service.js?v=grooming-pricing-20261006&groomers=named-20261016";
+} from "../services/grooming-service.js?v=grooming-pricing-20261006&flow=grooming-order-20261016&groomers=named-20261016";
 import { buildWalkInPets, renderWalkInConsentStep } from "./walk-in-consent-step.js?capacity=20261010&pet-weight=pet-weight-size-20261011-v3&groomers=named-20261016&consent=20261017";
 
 const state = {

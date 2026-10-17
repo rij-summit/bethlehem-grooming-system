@@ -11,12 +11,12 @@ const ui = context.adminDashboard();
 
 async function main() {
 const catalogue = JSON.parse(fs.readFileSync(path.join(__dirname, "grooming-catalogue-fixture.json"), "utf8").replace(/^\uFEFF/, "")).data;
-const catalogueModule = "../services/grooming-service.js?v=grooming-pricing-20261006";
-for (const component of ["admin-dashboard", "booking-services-step", "booking-review-step", "booking-consent-step", "walk-in-services-step", "walk-in-review-step"]) {
+const catalogueModule = "../services/grooming-service.js?v=grooming-pricing-20261006&flow=grooming-order-20261016&groomers=named-20261016";
+for (const component of ["admin-dashboard", "booking-services-step", "booking-review-step", "booking-consent-step", "booking-confirmed-step", "grooming-estimate-selection", "grooming-pre-registration", "walk-in-services-step", "walk-in-review-step"]) {
   const componentSource = fs.readFileSync(path.join(__dirname, `../scripts/components/${component}.js`), "utf8");
   assert.ok(componentSource.includes(`"${catalogueModule}"`), `${component} must share the same live catalogue module instance`);
 }
-const grooming = await import("../scripts/services/grooming-service.js?v=grooming-pricing-20261006");
+const grooming = await import(`../scripts/${catalogueModule.slice(3)}`);
 context.applyPaymentCatalogue(grooming.applyGroomingCatalogue(catalogue));
 const booking = {
   paid: false,
@@ -227,7 +227,8 @@ const reviewDocument = {
   },
 };
 const { renderEstimateReview } = await import("../scripts/components/grooming-estimate-selection.js");
-const reviewContext = { renderEstimateReview, ...grooming, ...draftUtilities, document: reviewDocument, window: {}, sessionStorage: { setItem() {} } };
+const petGroomers = await import("../scripts/components/pet-groomer-selection.js");
+const reviewContext = { renderEstimateReview, ...grooming, ...draftUtilities, ...petGroomers, document: reviewDocument, window: {}, sessionStorage: { setItem() {} } };
 const reviewSource = fs.readFileSync(path.join(__dirname, "../scripts/components/walk-in-review-step.js"), "utf8")
   .replace(/import[\s\S]*?from\s+"[^"]+";\s*/g, "")
   .replace(/export function /g, "function ");

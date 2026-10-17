@@ -156,6 +156,7 @@ class AdminDashboardSummaryTest extends TestCase
             $table->boolean('is_read')->default(false);
             $table->dateTime('created_at')->nullable();
         });
+        (require database_path('migrations/2026_10_16_000005_create_grooming_consents.php'))->up();
     }
 
     protected function tearDown(): void
@@ -163,6 +164,7 @@ class AdminDashboardSummaryTest extends TestCase
         Carbon::setTestNow();
 
         Schema::dropIfExists('customer_notifications');
+        Schema::dropIfExists('grooming_consents');
         Schema::dropIfExists('notifications');
         Schema::dropIfExists('payments');
         Schema::dropIfExists('booking_services');
@@ -336,6 +338,8 @@ class AdminDashboardSummaryTest extends TestCase
                 'pet_id' => $petId,
                 'pet_queue_date' => $petId <= 12 ? '2026-06-29' : null,
                 'pet_queue_number' => $petId <= 12 ? $petId : null,
+                'grooming_state' => $petId <= 12 ? BookingPet::GROOMING_STATE_FINISHED : BookingPet::GROOMING_STATE_NOT_STARTED,
+                'grooming_end_time' => $petId <= 12 ? '2026-06-29 07:45:00' : null,
             ];
         }
 

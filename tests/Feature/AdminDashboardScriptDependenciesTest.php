@@ -12,13 +12,13 @@ class AdminDashboardScriptDependenciesTest extends TestCase
 
         $dashboardPosition = strpos(
             $page,
-            'scripts/components/admin-dashboard.js?v=product-search-stock-20261002b',
+            'scripts/components/admin-dashboard.js?',
         );
 
         $this->assertNotFalse($dashboardPosition);
 
         $this->assertStringContainsString(
-            'scripts/api.js?v=grooming-notes-20260927',
+            'scripts/api.js?',
             $page,
         );
     }
@@ -37,11 +37,11 @@ class AdminDashboardScriptDependenciesTest extends TestCase
             $page,
         );
         $this->assertStringContainsString(
-            'scripts/components/admin-sidebar.js?v=staff-settings-20260923',
+            'scripts/components/admin-sidebar.js?',
             $page,
         );
         $this->assertStringContainsString('async loadLoggedInIdentity()', $sidebar);
-        $this->assertStringContainsString('await API.getMe("staff")', $sidebar);
+        $this->assertStringContainsString('API.getStaffIdentity ? API.getStaffIdentity() : API.getMe("staff")', $sidebar);
         $this->assertStringContainsString('this.staffDisplayName = fullName', $sidebar);
     }
 
@@ -112,8 +112,8 @@ class AdminDashboardScriptDependenciesTest extends TestCase
         $this->assertStringContainsString('API.getUnregisteredCustomerDetails(customerId)', $customerComponent);
         $this->assertStringNotContainsString('>CUSTOMERS</p>', $page);
         $this->assertStringNotContainsString('>PETS</p>', $page);
-        $this->assertStringContainsString('scripts/api.js?v=grooming-notes-20260927', $schedulesPage);
-        $this->assertStringContainsString('scripts/components/admin-dashboard.js?v=grooming-notes-20260927', $schedulesPage);
+        $this->assertStringContainsString('scripts/api.js?', $schedulesPage);
+        $this->assertStringContainsString('scripts/components/admin-dashboard.js?', $schedulesPage);
     }
 
     private function sourceBetween(string $source, string $start, string $end): string

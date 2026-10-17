@@ -92,6 +92,7 @@ async function calendar(service, time, date = '2026-10-09', restriction = null, 
 
 async function main() {
   const weightTools = await import('../scripts/components/pet-weight-size.js');
+  const ageTools = await import('../scripts/services/grooming-age.js');
   const draftStorage = new Map();
   globalThis.sessionStorage = { getItem: (key) => draftStorage.get(key) ?? null };
   let submittedForecast = null;
@@ -271,23 +272,26 @@ async function main() {
   ]) {
     let groomingStep;
     const grooming = harness('booking-consent-step.js', {
-      ...weightTools,
+      ...weightTools, ...ageTools,
+      initGroomingConsent: () => ({ valid: true, prefill() {}, validate() {}, setBusy() {},
+        confirmSubmission: async () => true,
+        payload: () => ({ terms_agreed: true, sedation_consent: true, signer_name: 'Customer Name',
+          consent_version: '2026-10-17', signature_strokes: [[[10, 10], [30, 30]]] }),
+      }),
       loadGroomingCatalogue: async () => {}, getBookingDraft: () => ({}),
       normalizeStepThreeDraft: () => [], selectedPricingSignature: () => 'reviewed',
       goToGroomingStep: (step) => { groomingStep = step; },
-      API: { storeBooking: async () => { throw failure; } },
+      API: { getMe: async () => ({ user: {} }), storeBooking: async () => { throw failure; } },
     });
     for (const [key, value] of Object.entries({
       bookingSchedule: { date: '2026-10-09', window_id: 1 },
       bookingPets: [{ id: 101, petName: 'Mochi', petType: 'cat' }],
       bookingStep3: { petSelections: [{ petId: 101, servicePackage: 'cat_full_grooming' }] },
       bookingStep4Review: { pets: [{ petId: 101, specialInstructions: 'Keep these notes' }] },
+      bookingConsentStep: { signer_name: 'Customer Name', signature_strokes: [[[10, 10], [30, 30]]] },
     })) grooming.storage.set(key, JSON.stringify(value));
     grooming.storage.set('groomingReviewedPricing', 'reviewed');
     grooming.context.initBookingConsentStep();
-    grooming.elements.get('mainConsentCheckbox').checked = true;
-    grooming.elements.get('sedationConsentCheckbox').checked = true;
-    grooming.elements.get('digitalSignature').value = 'Customer Name';
     await grooming.elements.get('bookingConsentForm').listeners.submit({ preventDefault() {} });
     assert.equal(groomingStep, 'schedule');
     assert.deepEqual(JSON.parse(grooming.storage.get('bookingSchedule')), { date: '2026-10-09' });
@@ -295,7 +299,8 @@ async function main() {
     for (const key of ['bookingPets', 'bookingStep3', 'bookingStep4Review', 'bookingConsentStep']) {
       assert.equal(grooming.storage.has(key), true, `preserve ${key}`);
     }
-    assert.equal(JSON.parse(grooming.storage.get('bookingConsentStep')).digitalSignature, 'Customer Name');
+    assert.equal(JSON.parse(grooming.storage.get('bookingConsentStep')).signer_name, 'Customer Name');
+    assert.deepEqual(JSON.parse(grooming.storage.get('bookingConsentStep')).signature_strokes, [[[10, 10], [30, 30]]]);
   }
   console.log('Preferred arrival windows: boundaries, restrictions, draft preservation, and expiry recovery passed.');
 }

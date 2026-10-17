@@ -58,6 +58,12 @@ class DynamicLucideIconInterfaceTest extends TestCase
                 continue;
             }
 
+            if (! str_contains($page, '<html')) {
+                $this->assertSame(realpath(base_path('pages/admin/clinic/sections/services.html')), $file->getRealPath());
+                $this->assertStringContainsString("fetch('./clinic/sections/services.html?", file_get_contents(base_path('scripts/components/admin-clinic-shell.js')));
+                $page = file_get_contents(base_path('pages/admin/clinic.html'));
+            }
+
             $this->assertStringContainsString(
                 'scripts/components/admin-sidebar.js',
                 str_replace('\\', '/', $page),

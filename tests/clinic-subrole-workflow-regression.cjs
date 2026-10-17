@@ -9,8 +9,17 @@ const stores = {};
 const events = [];
 let alpineInit;
 let role = 'staff';
+const focusTargets = new Map();
+function focusTarget(id) {
+  if (!focusTargets.has(id)) focusTargets.set(id, {
+    isConnected: true, getClientRects: () => [{}],
+    focus() { sandbox.document.activeElement = this; },
+  });
+  return focusTargets.get(id);
+}
 const sandbox = {
-  document: { addEventListener(name, callback) { if (name === 'alpine:init') alpineInit = callback; }, getElementById() { return { focus() {} }; } },
+  document: { activeElement: focusTarget('payment-trigger'), body: { style: { overflow: 'auto' } },
+    addEventListener(name, callback) { if (name === 'alpine:init') alpineInit = callback; }, getElementById: focusTarget },
   window: { addEventListener() {}, dispatchEvent(event) { events.push(event); }, location: { pathname: '/pages/admin/clinic.html', search: '' } },
   Alpine: { store(name, value) { stores[name] = value; } },
   CustomEvent: class { constructor(type, options) { this.type = type; this.detail = options?.detail; } },
@@ -18,7 +27,7 @@ const sandbox = {
   crypto: webcrypto, URLSearchParams, setTimeout, clearTimeout,
 };
 vm.createContext(sandbox);
-for (const file of ['admin-clinic.js', 'admin-clinic-case-workspace.js', 'admin-vaccinations.js', 'admin-sidebar.js']) {
+for (const file of ['cash-payment.js', 'admin-clinic.js', 'admin-clinic-case-workspace.js', 'admin-vaccinations.js', 'admin-sidebar.js']) {
   vm.runInContext(fs.readFileSync(path.join(root, 'scripts/components', file), 'utf8'), sandbox, {
     filename: path.join(root, 'scripts/components', file),
     importModuleDynamically: vm.constants.USE_MAIN_CONTEXT_DEFAULT_LOADER,
@@ -92,14 +101,29 @@ function permissions(clinical, payment, queue, customers) {
   const paymentCase = { id: 1, status: 'for_payment', total_amount: '600.00', charges: [{ description: 'Exam', amount: '600.00' }] };
   receptionist.reviewPayment(paymentCase);
   assert.equal(receptionist.payment.open, true);
+  assert.equal(sandbox.document.body.style.overflow, 'hidden');
+  assert.equal(sandbox.document.activeElement, focusTarget('clinic-cash-received'));
+  let payments = 0;
   sandbox.API.clinicRecordPayment = async (id, payload) => {
+    payments++;
     assert.equal(id, 1);
     assert.equal(payload.total_amount, '600.00');
     assert.equal(payload.payment_method, 'cash');
+    assert.equal(payload.amount_paid, 700);
+    return { appointment: { ...paymentCase, status: 'completed', paid: true,
+      payment_method: 'cash', cash_received: '700.00', change: 100 } };
   };
+  assert.equal(receptionist.canConfirmPayment, false);
+  receptionist.payment.amountPaid = '700';
   await receptionist.recordPayment();
-  assert.equal(receptionist.payment.open, false);
+  assert.equal(payments, 1);
+  assert.equal(receptionist.payment.open, true, 'The recorded receipt stays open until Done');
+  assert.equal(receptionist.payment.recorded, true);
   assert.equal(receptionist.payment.error, '');
+  receptionist.closePayment();
+  assert.equal(receptionist.payment.open, false);
+  assert.equal(sandbox.document.body.style.overflow, 'auto');
+  assert.equal(sandbox.document.activeElement, focusTarget('payment-trigger'));
 
   permissions(true, true, true, true);
   const vet = component('adminClinicPage');
@@ -108,7 +132,14 @@ function permissions(clinical, payment, queue, customers) {
   assert.equal(checkIns, 2);
   vet.reviewPayment(paymentCase);
   assert.equal(vet.payment.open, true);
+  vet.payment.amountPaid = '700';
   await vet.recordPayment();
+  assert.equal(payments, 2);
+  assert.equal(vet.payment.recorded, true);
+  vet.closePayment();
+  assert.equal(vet.payment.open, false);
+  assert.equal(sandbox.document.body.style.overflow, 'auto');
+  assert.equal(sandbox.document.activeElement, focusTarget('payment-trigger'));
   await vet.cancelCase({ id: 1 });
   sandbox.API.startClinicCase = async () => ({ case: { id: 1, status: 'in_consultation' } });
   let openedCase;
@@ -174,10 +205,10 @@ function permissions(clinical, payment, queue, customers) {
   const filters = page.slice(page.indexOf('aria-label="Case status filters"'), page.indexOf('<section x-show="[\'active-cases\''));
   const filterOrder = [...filters.matchAll(/@click="setTab\('([^']+)'\)"/g)].map(match => match[1]);
   assert.deepEqual(filterOrder, ['active-cases', 'confined', 'for-payment']);
-  assert.match(filters, /class="[^"]*lg:ml-auto"[^>]*:class="tab === 'for-payment'/);
+  assert.match(filters, /id="clinic-for-payment-filter"[^>]*:aria-pressed="tab === 'for-payment'"[^>]*@click="setTab\('for-payment'\)"/);
   assert.equal(filters.includes('justify-between'), false, 'Small screens use natural spacing and wrapping');
   assert.equal((page.match(/Save &amp; Send to Payment/g) || []).length, 1);
-  assert.match(page, /x-show="caseItem.status === 'for_payment'"[^>]*x-text="money\(caseItem.total_amount\)"/);
+  assert.match(page, /x-show="caseItem.status === 'for_payment'"[^>]*>[\s\S]*?x-text="money\(caseItem.total_amount\)"/);
   for (const label of ['Medications', 'Clinical Products Used', 'Finalize Use', 'productBusy']) {
     assert.equal(page.includes(label), false, `${label} must be removed`);
   }

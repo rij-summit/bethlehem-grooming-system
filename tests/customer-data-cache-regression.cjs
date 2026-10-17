@@ -8,6 +8,7 @@ const source = fs.readFileSync(path.join(root, "scripts/api.js"), "utf8");
 const pets = { success: true, pets: [{ pet_id: 1, pet_name: "Mochi", species: "Dog", is_archived: false }] };
 const profile = { user: { user_id: 1, first_name: "Test", last_name: "Customer", role: "customer" } };
 const bookings = { bookings: [], history: [], history_total: 0 };
+let healthRecordTools;
 
 class Storage {
   constructor() { this.values = new Map(); }
@@ -254,7 +255,7 @@ function mountPage(env, page) {
     const attributes = new Map(hidden ? [["inert", ""], ["aria-hidden", "true"]] : []);
     const events = new Map();
     const node = {
-      id, value: "", innerHTML: "", textContent: "", style: {}, dataset: {},
+      id, value: id === "historyServiceFilter" ? "all" : "", innerHTML: "", textContent: "", style: {}, dataset: {},
       classList: {
         add: (...names) => names.forEach((name) => classes.add(name)),
         remove: (...names) => names.forEach((name) => classes.delete(name)),
@@ -287,6 +288,7 @@ function mountPage(env, page) {
   context.window.ClientNotificationUI = { ensureDropdownControls: () => () => "all", setUnreadCount() {}, render() {} };
   const combobox = () => ({ setValue() {}, reset() {}, update() {}, setOptions() {}, setDisabled() {}, getValue: () => "" });
   Object.assign(context, {
+    ...healthRecordTools,
     createBreedCombobox: combobox, createBreedCoatCombobox: combobox, createFixedOptionCombobox: combobox,
     breedCoatCatalogueReady: Promise.resolve(), URLSearchParams,
   });
@@ -297,7 +299,8 @@ function mountPage(env, page) {
     script = fs.readFileSync(path.join(root, "scripts/components/client-settings.js"), "utf8");
   } else if (page === "grooming-history.html") {
     const html = fs.readFileSync(path.join(root, "pages/client/grooming-history.html"), "utf8");
-    script = [...html.matchAll(/<script>([\s\S]*?)<\/script>/g)].map((match) => match[1]).join("\n");
+    script = [...html.matchAll(/<script(?:\s+type="module")?>([\s\S]*?)<\/script>/g)]
+      .map((match) => match[1].replace(/^\s*import\s+[\s\S]*?from\s+"[^"]+";\s*/gm, "")).join("\n");
   } else {
     const dashboard = fs.readFileSync(path.join(root, "scripts/components/client-dashboard.js"), "utf8");
     script = dashboard.slice(dashboard.indexOf("(function () {", dashboard.indexOf("Appointments, Grooming Tracker & History")));
@@ -330,9 +333,15 @@ async function testActualPageLoaders() {
   assert.equal(settings.element("settingsContent").hasAttribute("inert"), false);
   assert.equal(settings.element("settingsFirstName").value, "Test");
   assert.equal(env.calls.length, count);
+  const clinicPending = deferred();
+  env.respond((endpoint) => endpoint === "/clinic/history" ? clinicPending.promise : bookings);
   const history = mountPage(env, "grooming-history.html");
   assert.equal(history.element("historyContent").hasAttribute("inert"), false);
-  assert.match(history.element("historyList").innerHTML, /No grooming sessions found/);
+  assert.match(history.element("historyList").innerHTML, /No history found/);
+  clinicPending.resolve({ medical_records: [{ id: 9, appointment_reference: "CL-CACHE-9", appointment_date: "2026-10-16", pet: { pet_name: "Mochi" } }] });
+  await flush();
+  assert.match(history.element("historyList").innerHTML, /CL-CACHE-9/);
+  assert.equal(env.calls.filter(call => call.endpoint === "/clinic/history").length, 1);
 
   env.advance(61000);
   const update = deferred();
@@ -374,6 +383,7 @@ async function testActualPageLoaders() {
 }
 
 async function main() {
+  healthRecordTools = await import('../scripts/components/customer-health-records.js');
   for (const test of [testCrossDocumentFlowAndColdMiss, testRevalidationAndFailure, testDeduplicationAndRaces, testInvalidation, testSessionIsolationAndFreshness, testExcludedDataAndStorageFailure, testActualPageLoaders]) {
     await test();
     console.log(`${test.name} passed`);
@@ -401,6 +411,7 @@ function serveBrowserFixture() {
         case "/api/me": data = profile; break;
         case "/api/pets": data = url.searchParams.get("archived") === "1" ? { pets: [] } : pets; break;
         case "/api/booking/history": data = bookings; break;
+        case "/api/clinic/history": data = { medical_records: [] }; break;
         case "/api/customer/notifications": data = { notifications: [], unread_count: 0 }; break;
         case "/api/pre-registration/access": data = { allowed: true }; break;
         case "/api/booking/grooming-capacity": data = { capacity: { max: 20, used: 0, remaining: 20 }, queue: { active: 0 } }; break;

@@ -62,6 +62,16 @@ try {
         }
         $table->timestamps();
     });
+    Schema::create('pet_groomers', function (Blueprint $table) {
+        $table->increments('id');
+        $table->string('first_name', 100);
+        $table->boolean('on_duty')->default(false);
+        $table->timestamps();
+    });
+    DB::table('pet_groomers')->insert([
+        ['first_name' => 'Anna', 'on_duty' => true],
+        ['first_name' => 'Miguel', 'on_duty' => true],
+    ]);
     ClinicSetting::current();
     Schema::create('bookings', function (Blueprint $table) {
         $table->increments('booking_id');

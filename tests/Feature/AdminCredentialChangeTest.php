@@ -76,11 +76,13 @@ class AdminCredentialChangeTest extends TestCase
             $table->timestamps();
             $table->index(['tokenable_type', 'tokenable_id']);
         });
+        (require database_path('migrations/2026_08_28_000003_create_password_reset_requests_table.php'))->up();
     }
 
     protected function tearDown(): void
     {
         Schema::dropIfExists('personal_access_tokens');
+        Schema::dropIfExists('password_reset_requests');
         Schema::dropIfExists('privileged_credential_changes');
         Schema::dropIfExists('pending_customer_registrations');
         Schema::dropIfExists('users');

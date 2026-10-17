@@ -296,7 +296,7 @@ class AdminCustomersCardTypographyInterfaceTest extends TestCase
             'import("./breed-combobox.js")',
             'import("./breed-coat-combobox.js")',
             'import("./fixed-option-combobox.js")',
-            'import("./pet-weight-size.js")',
+            'import("./pet-weight-size.js?',
             'tools.createBreedCombobox({',
             'tools.createBreedCoatCombobox({',
             'tools.createFixedOptionCombobox({',

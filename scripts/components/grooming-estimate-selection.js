@@ -1,5 +1,5 @@
 import { escapeHtml } from "../services/booking-draft-service.js";
-import { estimatePetGrooming, getGroomingPreferences } from "../services/grooming-service.js?v=grooming-pricing-20261006&groomers=named-20261016";
+import { estimatePetGrooming, getGroomingPreferences } from "../services/grooming-service.js?v=grooming-pricing-20261006&flow=grooming-order-20261016&groomers=named-20261016";
 
 export function renderEstimateSelection(pet, selection, staff = false) {
   const choices = getGroomingPreferences(selection.servicePackage);

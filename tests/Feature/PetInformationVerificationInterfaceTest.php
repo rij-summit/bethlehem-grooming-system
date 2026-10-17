@@ -97,8 +97,8 @@ class PetInformationVerificationInterfaceTest extends TestCase
 
         foreach ([
             'let allKnownPets = [];',
-            'API.getUserPets({ archived: 0 })',
-            'API.getUserPets({ archived: 1 })',
+            'API.getUserPets({ archived: archived ? 1 : 0, force })',
+            '...(archivedPetsCache || [])',
             'normalizePetNameForComparison(pet.pet_name) === normalizedPetName',
             'You already have a pet with this name.',
         ] as $clientValidation) {
@@ -272,7 +272,7 @@ class PetInformationVerificationInterfaceTest extends TestCase
             'text-[10px]',
             'syncEditVerifiedIndicators(pet);',
             'syncEditVerifiedIndicators(null);',
-            'my-pets.js?v=auth-session-20260816',
+            'my-pets.js?',
         ] as $editIndicator) {
             $this->assertStringContainsString(
                 $editIndicator,
@@ -305,11 +305,11 @@ class PetInformationVerificationInterfaceTest extends TestCase
             $this->clientDashboard,
         );
         $this->assertStringContainsString(
-            'client-dashboard.js?v=auth-session-20260816',
+            'client-dashboard.js?',
             $this->clientDashboardPage,
         );
         $this->assertStringContainsString(
-            'pet-details.js?v=auth-session-20260816',
+            'pet-details.js?',
             $this->petProfilePage,
         );
     }

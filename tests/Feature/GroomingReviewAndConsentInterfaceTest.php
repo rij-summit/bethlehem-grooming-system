@@ -6,7 +6,7 @@ use Tests\TestCase;
 
 class GroomingReviewAndConsentInterfaceTest extends TestCase
 {
-    public function test_review_pages_only_show_the_clinic_price_notice_for_plus_prices(): void
+    public function test_review_pages_share_the_price_presentation_and_only_show_notices_for_estimates(): void
     {
         $customerPage = file_get_contents(base_path('pages/client/grooming-pre-registration.html'));
         $walkInPage = file_get_contents(base_path('pages/admin/walk-in-booking-review.html'));
@@ -14,9 +14,7 @@ class GroomingReviewAndConsentInterfaceTest extends TestCase
         $walkInReview = file_get_contents(base_path('scripts/components/walk-in-review-step.js'));
         $pricing = file_get_contents(base_path('scripts/services/grooming-service.js'));
 
-        foreach ([$customerPage, $walkInPage, $customerReview, $walkInReview, $pricing] as $source) {
-            $this->assertStringContainsString('The price is finalized at the clinic.', $source);
-        }
+        $this->assertStringContainsString('disclaimer: isEstimate ? "Final price is confirmed at the clinic." : ""', $pricing);
 
         foreach ([$customerPage, $walkInPage] as $page) {
             $this->assertMatchesRegularExpression(
@@ -26,8 +24,9 @@ class GroomingReviewAndConsentInterfaceTest extends TestCase
         }
 
         foreach ([$customerReview, $walkInReview] as $review) {
-            $this->assertStringContainsString('state.reviewPayload.notices.includes(', $review);
-            $this->assertStringContainsString('${hasPlusPrice ? "mb-6" : "hidden"}', $review);
+            $this->assertStringContainsString('getGroomingPricePresentation(state.reviewPayload.totalPricing)', $review);
+            $this->assertStringContainsString('elements.reviewNotice.textContent = price.disclaimer;', $review);
+            $this->assertStringContainsString('${price.isEstimate ? "mb-6" : "hidden"}', $review);
         }
 
         $this->assertStringContainsString('const hasDisplayedPlusPrice = items.some', $pricing);

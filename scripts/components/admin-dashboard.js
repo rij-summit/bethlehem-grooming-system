@@ -3167,7 +3167,7 @@ function adminDashboard() {
       this.paymentModal.error = "";
       this.paymentModal.petBreakdown = [];
       try {
-        const { loadGroomingCatalogue } = await import("../services/grooming-service.js?v=grooming-pricing-20261006&groomers=named-20261016");
+        const { loadGroomingCatalogue } = await import("../services/grooming-service.js?v=grooming-pricing-20261006&flow=grooming-order-20261016&groomers=named-20261016");
         applyPaymentCatalogue(await loadGroomingCatalogue());
       } catch (error) {
         this.paymentModal.busy = false;

@@ -191,7 +191,9 @@ const draft = {
   assert.ok(page.includes(':aria-pressed="treatmentType'));
 
   const css = fs.readFileSync(path.join(root, "css/output.css"), "utf8");
-  for (const layer of [200, 210, 230, 250, 270]) {
+  const layers = new Set([...page.matchAll(/\bz-\[(2\d\d)\]/g)].map(match => Number(match[1])));
+  assert.deepEqual([...layers].sort((a, b) => a - b), [200, 210, 230, 250]);
+  for (const layer of layers) {
     const selector = `.z-\\[${layer}\\] {`;
     const offset = css.indexOf(selector);
     assert.ok(offset >= 0, `Compiled CSS must include ${selector}`);

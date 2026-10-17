@@ -1402,8 +1402,11 @@ class AdminVaccinationApiTest extends TestCase
             $user = new User;
             $user->forceFill(['user_id' => 2, 'role' => $subrole === 'admin' ? 'admin' : 'staff', 'staff_type' => 'clinic', 'staff_subrole' => $subrole]);
             Sanctum::actingAs($user);
-            foreach ([['quantity' => 2], ['unit_price' => 0], ['unit_price' => 900]] as $edit)
-                $this->patchJson("/api/admin/clinic-cases/201/charges/{$charge->id}", $edit)->assertUnprocessable()->assertJsonValidationErrors('charges');
+            foreach ([['quantity' => 2], ['unit_price' => 0], ['unit_price' => 900]] as $edit) {
+                $response = $this->patchJson("/api/admin/clinic-cases/201/charges/{$charge->id}", $edit);
+                if ($subrole === 'clinic_receptionist') $response->assertForbidden();
+                else $response->assertUnprocessable()->assertJsonValidationErrors('charges');
+            }
         }
         $this->postJson("/api/admin/pets/101/vaccinations/{$id}/publish")->assertConflict();
         $this->assertEquals($charge, DB::table('clinic_charges')->first());
@@ -1436,7 +1439,9 @@ class AdminVaccinationApiTest extends TestCase
         foreach (['2026_10_13_000001_create_clinic_services_table.php', '2026_10_13_000002_create_clinic_case_services_table.php',
             '2026_10_13_000004_create_clinic_confinements.php', '2026_10_14_000001_remove_clinic_service_type.php', '2026_10_14_000002_configure_confinement_charges.php'] as $migration) (require database_path('migrations/'.$migration))->up();
         $service = \App\Models\ClinicService::create(['name' => 'Inpatient care', 'category_id' => DB::table('clinic_service_categories')->where('name', 'Confinement')->value('id'),
-            'identity_key' => hash('sha256', 'inpatient'), 'pricing_method' => 'tiered', 'tier_basis' => 'pet_size', 'charge_behavior' => 'base_confinement', 'tiers' => array_map(fn ($size) => ['size' => $size, 'price' => 500], ['small', 'medium', 'large', 'extra_large']), 'billing_unit' => 'day', 'is_active' => true]);
+            'identity_key' => hash('sha256', 'inpatient'), 'pricing_method' => 'tiered', 'tier_basis' => 'weight_kg', 'charge_behavior' => 'base_confinement',
+            'tiers' => array_map(fn ($size, $cutoff) => ['size' => $size, 'max_weight_kg' => $cutoff, 'price' => 500],
+                ['small', 'medium', 'large', 'extra_large'], [10, 25, 40, null]), 'billing_unit' => 'day', 'is_active' => true]);
         $this->postJson('/api/admin/clinic-cases/201/confinement', ['reason' => 'Observe', 'request_key' => (string) \Illuminate\Support\Str::uuid()])->assertCreated();
         $id = $this->postJson('/api/admin/pets/101/vaccinations', $this->medicineTreatment())->assertCreated()->json('vaccination.id');
         $this->postJson("/api/admin/pets/101/vaccinations/{$id}/publish", ['finish_case' => true])->assertUnprocessable()->assertJsonValidationErrors('status');

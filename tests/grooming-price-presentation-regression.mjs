@@ -1,11 +1,12 @@
 import assert from "node:assert/strict";
 import fs from "node:fs";
 import vm from "node:vm";
-import * as grooming from "../scripts/services/grooming-service.js?v=grooming-pricing-20261006";
+import * as grooming from "../scripts/services/grooming-service.js?v=grooming-pricing-20261006&flow=grooming-order-20261016&groomers=named-20261016";
 import * as draft from "../scripts/services/booking-draft-service.js";
 import { renderEstimateReview, renderEstimateSelection } from "../scripts/components/grooming-estimate-selection.js";
 import { initBookingConfirmedStep } from "../scripts/components/booking-confirmed-step.js";
 import { formatSavedWeight } from "../scripts/components/pet-weight-size.js?v=pet-weight-size-20261011-v3";
+import * as petGroomers from "../scripts/components/pet-groomer-selection.js";
 
 const fixture = JSON.parse(fs.readFileSync(new URL("./grooming-catalogue-fixture.json", import.meta.url), "utf8").replace(/^\uFEFF/, "")).data;
 const pet = (id) => ({ id, petName: id, petType: "dog", size: "small", sizeVerified: false, weight: 5 });
@@ -38,7 +39,7 @@ function createRenderer(file) {
     if (!elements.has(id)) elements.set(id, { classList: classList(), addEventListener() {} });
     return elements.get(id);
   } };
-  const context = vm.createContext({ ...grooming, ...draft, formatSavedWeight, renderEstimateReview, renderEstimateSelection, document, sessionStorage: { setItem() {} }, window: {} });
+  const context = vm.createContext({ ...grooming, ...draft, ...petGroomers, formatSavedWeight, renderEstimateReview, renderEstimateSelection, document, sessionStorage: { setItem() {} }, window: {} });
   const source = fs.readFileSync(new URL(`../scripts/components/${file}.js`, import.meta.url), "utf8")
     .replace(/import[\s\S]*?from\s+"[^"]+";\s*/g, "")
     .replace(/export\s+(?=(?:async\s+)?function)/g, "");

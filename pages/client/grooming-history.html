@@ -390,10 +390,12 @@
             API.loadCustomerData("/booking/history", () => API.getBookingHistory(), (data) => {
               groomingHistory = data.history || [];
               updateHistory();
+              showHistoryContent();
             }),
             API.loadCustomerData("/clinic/history", () => API.getCustomerClinicHistory(), (data) => {
               clinicHistory = data.medical_records || [];
               updateHistory();
+              showHistoryContent();
             }),
           ]);
           const failures = results.flatMap((result, index) => result.status === "rejected" ? [index === 0 ? "Grooming" : "Clinic"] : []);

@@ -61,16 +61,14 @@ class ClientPhosphorIconInterfaceTest extends TestCase
             'phosphor.svg#paw-print',
             'phosphor.svg#scissors',
             'phosphor.svg#stethoscope',
-            'phosphor.svg#syringe',
         ] as $icon) {
             $this->assertStringContainsString($icon, $tabBar);
         }
 
         $panelBoundaries = [
             ['<section data-pet-panel="overview"', '<section data-pet-panel="grooming"'],
-            ['<section data-pet-panel="grooming"', '<section data-pet-panel="medical"'],
-            ['<section data-pet-panel="medical"', '<section data-pet-panel="vaccinations"'],
-            ['<section data-pet-panel="vaccinations"', '<script src="../../scripts/api.js'],
+            ['<section data-pet-panel="grooming"', '<section data-pet-panel="health"'],
+            ['<section data-pet-panel="health"', '<script src="../../scripts/api.js'],
         ];
 
         foreach ($panelBoundaries as [$start, $end]) {

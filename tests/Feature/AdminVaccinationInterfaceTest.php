@@ -238,10 +238,10 @@ class AdminVaccinationInterfaceTest extends TestCase
 
         $this->assertStringContainsString('Medical Record', $this->clinicPage);
         $this->assertStringContainsString('clinicSaveRecord', $this->clinicComponent);
-        $this->assertStringContainsString('clinicUploadAttachment', $this->clinicComponent);
-        $this->assertStringContainsString('data-pet-panel="vaccinations"', $clientPage);
+        $this->assertStringContainsString('clinicUploadAttachment', file_get_contents(base_path('scripts/components/admin-clinic-case-workspace.js')));
+        $this->assertStringContainsString('data-pet-panel="health"', $clientPage);
         $this->assertStringContainsString(
-            'Published vaccination information recorded by the clinic for this pet.',
+            'Vaccinations',
             $clientPage,
         );
         $this->assertStringContainsString('API.getPetVaccinations(petId)', $clientComponent);

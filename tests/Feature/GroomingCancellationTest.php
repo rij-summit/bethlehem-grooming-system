@@ -113,6 +113,7 @@ class GroomingCancellationTest extends TestCase
             });
         }
         (require database_path('migrations/2026_10_16_000001_add_grooming_cancellation_audit.php'))->up();
+        (require database_path('migrations/2026_10_16_000005_create_grooming_consents.php'))->up();
         DB::table('users')->insert(['user_id' => 1, 'first_name' => 'Gerald', 'last_name' => 'Senining']);
         DB::table('bookings')->insert(['booking_id' => 1, 'user_id' => 1, 'queue_number' => 3, 'dropped_off_at' => now()]);
         DB::table('services')->insert(['service_id' => 1, 'slug' => 'regular_dog_grooming', 'service_name' => 'Regular Dog Grooming']);

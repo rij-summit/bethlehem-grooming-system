@@ -56,6 +56,9 @@ class GroomingAdministrationAuthorizationTest extends TestCase
         ['POST', 'api/admin/bookings/{id}/picked-up'],
         ['POST', 'api/admin/bookings/{id}/pay'],
         ['POST', 'api/admin/bookings/{id}/pay-now'],
+        ['POST', 'api/admin/bookings/{id}/online-payment'],
+        ['GET', 'api/admin/bookings/{id}/online-payment'],
+        ['DELETE', 'api/admin/bookings/{id}/online-payment'],
         ['POST', 'api/admin/bookings/{id}/release'],
         ['GET', 'api/admin/transactions'],
         ['POST', 'api/admin/walk-in'],
@@ -3288,7 +3291,7 @@ class GroomingAdministrationAuthorizationTest extends TestCase
         if (DB::getDriverName() !== 'mysql' || ! str_starts_with(DB::connection()->getDatabaseName(), 'bethlehem_capacity_')) {
             $this->markTestSkipped('Run tests/grooming-capacity-concurrency.php with its isolated MySQL database.');
         }
-        $payload = $this->prepareReservationDay();
+        $payload = array_replace($this->groomingConsentFixture(), $this->prepareReservationDay());
         $signal = tempnam(sys_get_temp_dir(), 'grooming-lock-');
         unlink($signal);
         $environment = ['DB_CONNECTION' => 'mysql', 'DB_DATABASE' => DB::connection()->getDatabaseName(), 'DB_URL' => '',
@@ -3300,7 +3303,7 @@ class GroomingAdministrationAuthorizationTest extends TestCase
             $first->start();
             $deadline = microtime(true) + 10;
             while (! file_exists($signal) && $first->isRunning() && microtime(true) < $deadline) usleep(10000);
-            $this->assertFileExists($signal, $first->getErrorOutput());
+            $this->assertFileExists($signal, $first->getOutput().$first->getErrorOutput());
             $second->start();
             $first->wait();
             $second->wait();

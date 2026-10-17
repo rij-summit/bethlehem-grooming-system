@@ -11,26 +11,23 @@ class AdminWalkInEntryPointInterfaceTest extends TestCase
         $clinicPage = file_get_contents(base_path('pages/admin/clinic.html'));
         $walkInPage = file_get_contents(base_path('pages/admin/walk-in-booking.html'));
         $ownerStep = file_get_contents(base_path('scripts/components/walk-in-owner-step.js'));
+        $clinicComponent = file_get_contents(base_path('scripts/components/admin-clinic.js'));
 
         $this->assertStringContainsString(
-            'href="./walk-in-booking.html?flow=clinic&amp;source=clinic"',
+            '@click="startWalkIn()"',
             $clinicPage,
         );
         $this->assertStringContainsString(
-            'params.get("source") === "clinic" || params.get("flow") === "clinic"',
+            '(flowParams.get("flow") || flowParams.get("source")) === "clinic"',
             $ownerStep,
         );
         $this->assertStringContainsString(
-            'if (!isClinicWalkInEntry())',
+            'const isClinic = appointmentType === "clinic";',
             $ownerStep,
         );
         $this->assertStringContainsString(
-            'document.getElementById("typeClinic")',
-            $ownerStep,
-        );
-        $this->assertStringContainsString(
-            'clinicType.checked = true;',
-            $ownerStep,
+            'window.location.href = "./walk-in-booking.html?flow=clinic&new=1";',
+            $clinicComponent,
         );
         $this->assertSame(
             2,
@@ -41,23 +38,23 @@ class AdminWalkInEntryPointInterfaceTest extends TestCase
             $ownerStep,
         );
         $this->assertStringContainsString(
-            'link.setAttribute("href", "./clinic.html");',
+            'link.setAttribute("href", isClinic ? "./clinic.html" : "./appointments.html");',
             $ownerStep,
         );
         $this->assertStringContainsString(
-            'link.addEventListener("click", handleWalkInBack);',
+            'return appointmentType;',
             $ownerStep,
         );
         $this->assertStringContainsString(
-            'window.location.assign("./clinic.html");',
+            'sessionStorage.setItem(WALK_IN_OWNER_STORAGE_KEY, JSON.stringify({ appointmentType }));',
             $ownerStep,
         );
         $this->assertStringContainsString(
-            'walk-in-owner-step.js?v=clinic-existing-customers-20260813',
+            'walk-in-owner-step.js?',
             $walkInPage,
         );
         $this->assertStringContainsString(
-            'applyRequestedAppointmentType();',
+            'initializeWalkInFlow();',
             $ownerStep,
         );
     }
@@ -67,11 +64,13 @@ class AdminWalkInEntryPointInterfaceTest extends TestCase
         $walkInPage = file_get_contents(base_path('pages/admin/walk-in-booking.html'));
         $appointmentsPage = file_get_contents(base_path('pages/admin/appointments.html'));
         $dashboardComponent = file_get_contents(base_path('scripts/components/admin-dashboard.js'));
+        $ownerStep = file_get_contents(base_path('scripts/components/walk-in-owner-step.js'));
 
-        $this->assertMatchesRegularExpression(
-            '/id="typeGrooming"[^>]*value="grooming"[^>]*checked/',
+        $this->assertStringNotContainsString(
+            'id="typeGrooming"',
             $walkInPage,
         );
+        $this->assertMatchesRegularExpression('/\?\s*"clinic"\s*:\s*"grooming";/', $ownerStep);
         $this->assertSame(
             2,
             substr_count($walkInPage, 'href="./appointments.html"'),
@@ -81,7 +80,7 @@ class AdminWalkInEntryPointInterfaceTest extends TestCase
             $appointmentsPage,
         );
         $this->assertStringContainsString(
-            'walkInBookingUrl: "./walk-in-booking.html"',
+            'walkInBookingUrl: "./walk-in-booking.html?flow=grooming&new=1"',
             $dashboardComponent,
         );
     }
@@ -132,17 +131,18 @@ class AdminWalkInEntryPointInterfaceTest extends TestCase
         $ownerStep = file_get_contents(base_path('scripts/components/walk-in-owner-step.js'));
         $petStep = file_get_contents(base_path('scripts/components/walk-in-pet-step.js'));
         $clinicConsentStep = file_get_contents(base_path('scripts/components/walk-in-clinic-consent-step.js'));
+        $ownerPage = file_get_contents(base_path('pages/admin/walk-in-booking.html'));
 
         $this->assertStringContainsString(
-            'elements.existingCustomerSection?.classList.remove("hidden");',
-            $ownerStep,
+            '<section id="existingCustomerSection" class="mb-6',
+            $ownerPage,
         );
         $this->assertStringNotContainsString(
             'document.getElementById("typeGrooming").checked = true;',
             $ownerStep,
         );
         $this->assertStringContainsString(
-            '"./walk-in-booking.html?flow=clinic&source=clinic"',
+            '`./walk-in-booking.html?flow=${getOwnerAppointmentType()}`',
             $petStep,
         );
 
