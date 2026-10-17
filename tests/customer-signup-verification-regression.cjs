@@ -4,7 +4,7 @@ const path = require('node:path');
 const vm = require('node:vm');
 const root = path.resolve(__dirname, '..');
 
-function page({ deliveryFailed = false, noStorage = false } = {}) {
+function page({ deliveryFailed = false, noStorage = false, deliveryStatus = null } = {}) {
   let now = 100000;
   const intervals = new Map();
   const timeouts = new Map();
@@ -51,9 +51,12 @@ function page({ deliveryFailed = false, noStorage = false } = {}) {
     location: { search: '', hash: '', replace(target) { calls.push(['redirect', target]); } },
     setInterval(callback) { const id = ++nextId; intervals.set(id, callback); return id; },
     clearInterval(id) { intervals.delete(id); },
+    clearTimeout(id) { timeouts.delete(id); },
     setTimeout(callback, ms) { const id = ++nextId; timeouts.set(id, { callback, at: now + ms }); return id; },
   };
   const API = {
+    getEmailDeliveryToken: () => deliveryStatus ? 'private-delivery-receipt' : '',
+    emailDeliveryStatus: async () => ({ status: deliveryStatus }),
     async resendVerification(email) { calls.push(['send', email]); return { resend_after: 45 }; },
     async verifyEmail(email, code) { calls.push(['verify', email, code]); return { token: 'session', user: { role: 'customer' } }; },
   };
@@ -66,7 +69,7 @@ function page({ deliveryFailed = false, noStorage = false } = {}) {
       removeItem(key) { if (noStorage) throw Error('blocked'); storage.delete(key); },
     },
   });
-  for (const source of ['scripts/auth/verification-code.js', 'scripts/auth/client/signup-verification.js']) {
+  for (const source of ['scripts/auth/verification-code.js', 'scripts/auth/email-delivery.js', 'scripts/auth/client/signup-verification.js']) {
     vm.runInContext(fs.readFileSync(path.join(root, source), 'utf8'), context, { filename: source });
   }
   ready();
@@ -144,6 +147,16 @@ function page({ deliveryFailed = false, noStorage = false } = {}) {
   assert.equal(p.element('stateSuccess').classList.contains('hidden'), false);
   p.advance(1500);
   assert.deepEqual(p.calls.at(-1), ['redirect', './dashboard.html']);
+
+  const transportFailure = page({ deliveryStatus: 'failed' });
+  await new Promise(resolve => setImmediate(resolve));
+  assert.match(transportFailure.element('signupCodeMessage').textContent, /could not be sent/);
+  assert.doesNotMatch(transportFailure.element('verificationDescription').textContent, /We sent/);
+  assert.deepEqual(transportFailure.calls, [], 'Delivery failure cannot authenticate or redirect');
+  const transportAccepted = page({ deliveryStatus: 'sent' });
+  await new Promise(resolve => setImmediate(resolve));
+  assert.match(transportAccepted.element('verificationDescription').textContent, /We sent/);
+  assert.deepEqual(transportAccepted.calls, [], 'Delivery receipt alone cannot authenticate');
 
   const throttled = page({ deliveryFailed: true });
   assert.match(throttled.element('signupCodeMessage').textContent, /registration was saved/);

@@ -10,6 +10,7 @@ use App\Notifications\VerifyEmailNotification;
 use Illuminate\Contracts\Notifications\Dispatcher;
 use Illuminate\Database\Schema\Blueprint;
 use Illuminate\Support\Facades\Hash;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Notification;
 use Illuminate\Support\Facades\Schema;
 use Tests\TestCase;
@@ -79,6 +80,9 @@ class EmailVerificationTest extends TestCase
 
     protected function tearDown(): void
     {
+        Schema::dropIfExists('jobs');
+        Schema::dropIfExists('job_batches');
+        Schema::dropIfExists('failed_jobs');
         Schema::dropIfExists('personal_access_tokens');
         Schema::dropIfExists('login_email_challenges');
         Schema::dropIfExists('pending_customer_registrations');
@@ -827,7 +831,7 @@ class EmailVerificationTest extends TestCase
             ->assertOk()
             ->assertJsonPath(
                 'message',
-                'If that email is registered and unverified, a new verification code has been sent.',
+                'If that email is registered and unverified, a new verification email is queued.',
             );
         Notification::assertNothingSent();
     }
@@ -1146,6 +1150,186 @@ class EmailVerificationTest extends TestCase
         $this->assertDatabaseCount('users', 1);
         $migration->up();
         $this->assertTrue(Schema::hasIndex('pending_customer_registrations', ['registration_edit_token_hash'], 'unique'));
+    }
+
+    public function test_login_resend_failure_preserves_the_previous_challenge(): void
+    {
+        Notification::fake();
+        $user = User::factory()->create(['password_hash' => Hash::make('strong-password')]);
+        $response = $this->postJson('/api/sign-in', [
+            'identifier' => $user->email, 'password' => 'strong-password',
+        ])->assertAccepted();
+        $code = $this->loginCodeSentTo($user);
+        $previous = LoginEmailChallenge::firstOrFail()->getAttributes();
+        $this->mock(Dispatcher::class, function ($mock) {
+            $mock->shouldReceive('send')->once()
+                ->andThrow(new \RuntimeException('SMTP secret must not reach the browser'));
+        });
+
+        $this->postJson('/api/email/login/resend', ['poll_token' => $response->json('login_poll_token')])
+            ->assertStatus(503)->assertJsonPath('success', false)
+            ->assertDontSee('SMTP secret');
+        $this->assertSame($previous, LoginEmailChallenge::firstOrFail()->getAttributes());
+        $this->postJson('/api/email/login/confirm', [
+            'poll_token' => $response->json('login_poll_token'), 'code' => $code,
+        ])->assertOk();
+    }
+
+    public function test_login_resend_rotates_the_code_without_resetting_attempt_limits(): void
+    {
+        Notification::fake();
+        $user = User::factory()->create(['password_hash' => Hash::make('strong-password')]);
+        $response = $this->postJson('/api/sign-in', [
+            'identifier' => $user->email, 'password' => 'strong-password',
+        ])->assertAccepted();
+        $pollToken = $response->json('login_poll_token');
+        $oldCode = $this->loginCodeSentTo($user);
+        foreach (range(1, 3) as $attempt) {
+            $this->postJson('/api/email/login/confirm', [
+                'poll_token' => $pollToken, 'code' => $oldCode === '000000' ? '000001' : '000000',
+            ])->assertStatus(422);
+        }
+        Notification::fake();
+        $this->withServerVariables(['REMOTE_ADDR' => '192.0.2.1'])
+            ->postJson('/api/email/login/resend', ['poll_token' => $pollToken])->assertOk();
+        $newCode = $this->loginCodeSentTo($user);
+        $this->assertNotSame($oldCode, $newCode);
+        $this->postJson('/api/email/login/confirm', ['poll_token' => $pollToken, 'code' => $oldCode])->assertStatus(422);
+        $this->postJson('/api/email/login/confirm', ['poll_token' => $pollToken, 'code' => $oldCode])->assertStatus(429);
+        $this->postJson('/api/email/login/confirm', ['poll_token' => $pollToken, 'code' => $newCode])->assertStatus(429);
+        $this->assertDatabaseCount('personal_access_tokens', 0);
+    }
+
+    public function test_login_email_requests_are_throttled_before_replacing_the_challenge(): void
+    {
+        Notification::fake();
+        $user = User::factory()->create(['password_hash' => Hash::make('strong-password')]);
+        foreach (range(1, 3) as $attempt) {
+            $this->postJson('/api/sign-in', [
+                'identifier' => $user->email, 'password' => 'strong-password',
+            ])->assertAccepted();
+        }
+        $hash = LoginEmailChallenge::firstOrFail()->token_hash;
+        $this->postJson('/api/sign-in', [
+            'identifier' => $user->email, 'password' => 'strong-password',
+        ])->assertStatus(429)->assertHeader('Retry-After')->assertJsonMissingPath('token');
+        $this->assertSame($hash, LoginEmailChallenge::firstOrFail()->token_hash);
+        $this->assertDatabaseCount('personal_access_tokens', 0);
+    }
+
+    public function test_database_queue_delivers_registration_mail_and_reports_transport_acceptance(): void
+    {
+        $this->useDatabaseMailQueue();
+        $response = $this->postJson('/api/register', $this->registrationPayload())->assertCreated();
+        $receipt = $response->json('email_delivery_token');
+        $this->assertIsString($receipt);
+        $this->assertDatabaseCount('jobs', 1);
+        $this->assertCount(0, app('mailer')->getSymfonyTransport()->messages());
+        $this->postJson('/api/email/delivery-status', ['delivery_token' => $receipt])
+            ->assertOk()->assertJsonPath('status', 'queued');
+        $payload = DB::table('jobs')->value('payload');
+        $command = json_decode($payload, true)['data']['command'];
+        $this->assertStringNotContainsString('VerifyEmailNotification', $command);
+
+        $this->artisan('queue:work', ['--once' => true, '--sleep' => 0])->assertExitCode(0);
+        $this->assertDatabaseCount('jobs', 0);
+        $messages = app('mailer')->getSymfonyTransport()->messages();
+        $this->assertCount(1, $messages);
+        $email = $messages[0]->getOriginalMessage();
+        preg_match('/\b[0-9]{6}\b/', $email->getTextBody(), $matches);
+        $this->assertNotEmpty($matches);
+        $this->assertStringNotContainsString($matches[0], $payload);
+        $this->postJson('/api/email/delivery-status', ['delivery_token' => $receipt])
+            ->assertOk()->assertJsonPath('status', 'sent');
+        $this->postJson('/api/email/verify', ['email' => 'new.customer@example.test', 'code' => $matches[0]])
+            ->assertOk()->assertJsonStructure(['token']);
+    }
+
+    public function test_database_queue_delivers_otp_for_every_login_role(): void
+    {
+        $this->useDatabaseMailQueue();
+        foreach (['customer', 'staff', 'admin'] as $role) {
+            $user = User::factory()->create(['role' => $role, 'password_hash' => Hash::make('strong-password')]);
+            $response = $this->postJson('/api/sign-in', [
+                'identifier' => $user->email, 'password' => 'strong-password',
+            ])->assertAccepted()->assertJsonMissingPath('token');
+            $this->assertSame(0, $user->tokens()->count());
+            $this->artisan('queue:work', ['--once' => true, '--sleep' => 0])->assertExitCode(0);
+            $email = app('mailer')->getSymfonyTransport()->messages()->last()->getOriginalMessage();
+            $this->assertSame($user->email, $email->getTo()[0]->getAddress());
+            preg_match('/\b[0-9]{6}\b/', $email->getTextBody(), $matches);
+            $this->postJson('/api/email/delivery-status', ['delivery_token' => $response->json('email_delivery_token')])
+                ->assertOk()->assertJsonPath('status', 'sent');
+            $this->postJson('/api/email/login/confirm', [
+                'poll_token' => $response->json('login_poll_token'), 'code' => $matches[0],
+            ])->assertOk()->assertJsonPath('user.role', $role)->assertJsonStructure(['token']);
+        }
+    }
+
+    public function test_transport_failure_is_reported_without_exposing_secrets_and_can_retry(): void
+    {
+        $this->useDatabaseMailQueue();
+        app('mail.manager')->extend('unavailable', fn () => new class extends \Symfony\Component\Mailer\Transport\AbstractTransport {
+            protected function doSend(\Symfony\Component\Mailer\SentMessage $message): void
+            {
+                throw new \Symfony\Component\Mailer\Exception\TransportException('Private SMTP credentials');
+            }
+            public function __toString(): string { return 'unavailable'; }
+        });
+        config()->set('mail.mailers.unavailable', ['transport' => 'unavailable']);
+        config()->set('mail.default', 'unavailable');
+        $response = $this->postJson('/api/register', $this->registrationPayload())->assertCreated();
+        $receipt = $response->json('email_delivery_token');
+        $this->artisan('queue:work', ['--once' => true, '--sleep' => 0])->assertExitCode(0);
+        $this->postJson('/api/email/delivery-status', ['delivery_token' => $receipt])
+            ->assertOk()->assertJsonPath('status', 'failed')->assertDontSee('Private SMTP');
+        $this->assertDatabaseCount('personal_access_tokens', 0);
+        $this->assertDatabaseCount('jobs', 1);
+        config()->set('mail.default', 'array');
+        DB::table('jobs')->update(['available_at' => now()->timestamp]);
+        $this->artisan('queue:work', ['--once' => true, '--sleep' => 0])->assertExitCode(0);
+        $this->postJson('/api/email/delivery-status', ['delivery_token' => $receipt])
+            ->assertOk()->assertJsonPath('status', 'sent');
+    }
+
+    public function test_production_cannot_report_log_failover_as_delivered_login_mail(): void
+    {
+        Notification::fake();
+        $user = User::factory()->create(['password_hash' => Hash::make('strong-password')]);
+        $this->app->instance('env', 'production');
+        config()->set('app.frontend_url', 'https://clinic.example.test');
+        config()->set('mail.from.address', 'clinic@example.test');
+        config()->set('mail.default', 'failover');
+        $this->postJson('/api/sign-in', [
+            'identifier' => $user->email, 'password' => 'strong-password',
+        ])->assertStatus(503)->assertJsonMissingPath('token');
+        $this->assertDatabaseCount('login_email_challenges', 0);
+    }
+
+    public function test_public_resend_delivery_status_does_not_enumerate_addresses(): void
+    {
+        Notification::fake();
+        $response = $this->postJson('/api/register', $this->registrationPayload())->assertCreated();
+        $this->travel(46)->seconds();
+        $this->postJson('/api/email/resend', ['email' => 'new.customer@example.test'])
+            ->assertOk()->assertJsonPath('email_delivery_token', null);
+        $this->postJson('/api/email/resend', ['email' => 'missing@example.test'])
+            ->assertOk()->assertJsonPath('email_delivery_token', null);
+        $this->travel(46)->seconds();
+        $resend = $this->postJson('/api/email/resend', [
+            'email' => 'new.customer@example.test', 'registration_token' => $response->json('registration_token'),
+        ])->assertOk();
+        $this->assertIsString($resend->json('email_delivery_token'));
+        $this->postJson('/api/email/delivery-status', ['delivery_token' => str_repeat('x', 64)])
+            ->assertOk()->assertJsonPath('status', 'unavailable')
+            ->assertJsonMissingPath('email')->assertJsonMissingPath('code');
+    }
+
+    private function useDatabaseMailQueue(): void
+    {
+        (require base_path('database/migrations/0001_01_01_000002_create_jobs_table.php'))->up();
+        config()->set('queue.default', 'database');
+        config()->set('mail.default', 'array');
     }
 
     private function registrationPayload(): array

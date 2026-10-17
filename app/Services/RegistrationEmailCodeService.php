@@ -17,7 +17,7 @@ class RegistrationEmailCodeService
     public const TTL_MINUTES = 15;
     public const MAX_ATTEMPTS = 5;
 
-    public function send(User|PendingCustomerRegistration $registrant): void
+    public function send(User|PendingCustomerRegistration $registrant): string
     {
         self::assertMailerDoesNotLogCodes();
         EmailVerificationController::assertMailCanBeDelivered();
@@ -55,7 +55,7 @@ class RegistrationEmailCodeService
             return [$code, $hash, $previous, $locked];
         });
         try {
-            $recipient->notify(new VerifyEmailNotification($code));
+            return AuthenticationMailDelivery::queue($recipient, new VerifyEmailNotification($code));
         } catch (Throwable $exception) {
             // Restore only our issuance; never overwrite a newer resend or a
             // consumed registration. Queue jobs are encrypted and retry delivery.
@@ -80,7 +80,9 @@ class RegistrationEmailCodeService
             if (isset($checked[$name])) continue;
             $checked[$name] = true;
             $settings = config('mail.mailers.'.$name, []);
-            if (($settings['transport'] ?? null) === 'log') {
+            $transport = $settings['transport'] ?? null;
+            if ($transport === 'log'
+                || (! app()->environment(['local', 'testing']) && ($transport === 'array' || ! $transport))) {
                 throw new \RuntimeException('Registration codes require a deliverable mailer.');
             }
             foreach ($settings['mailers'] ?? [] as $child) $mailers[] = $child;

@@ -6,13 +6,14 @@ use App\Http\Controllers\EmailVerificationController;
 use App\Models\LoginEmailChallenge;
 use App\Models\User;
 use App\Notifications\ConfirmLoginNotification;
+use Illuminate\Http\Exceptions\HttpResponseException;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
 use Throwable;
 
 class LoginEmailChallengeService
 {
-    public function resend(string $plainPollToken): void
+    public function resend(string $plainPollToken): string
     {
         $pollTokenHash = hash('sha256', $plainPollToken);
 
@@ -20,26 +21,36 @@ class LoginEmailChallengeService
             ->where('poll_token_hash', $pollTokenHash)
             ->first();
 
-        if (! $challenge) {
-            throw new \RuntimeException('No pending sign-in found for this session.');
-        }
-
-        if (now()->isAfter($challenge->expires_at)) {
-            throw new \RuntimeException('This sign-in session has expired. Please sign in again.');
+        if (! $challenge || now()->isAfter($challenge->expires_at)) {
+            throw new HttpResponseException(response()->json([
+                'success' => false,
+                'message' => 'This sign-in session has expired. Please sign in again.',
+                'expired' => true,
+            ], 422));
         }
 
         $user = User::find($challenge->user_id);
 
         if (! $user || ! $user->is_active || $user->is_archived) {
-            throw new \RuntimeException('This account cannot complete sign-in.');
+            throw new HttpResponseException(response()->json([
+                'success' => false,
+                'code' => 'account_disabled',
+                'message' => 'This account cannot complete sign-in. Please contact the clinic.',
+            ], 403));
         }
 
         EmailVerificationController::assertMailCanBeDelivered();
 
-        $code = str_pad((string) random_int(0, 999999), 6, '0', STR_PAD_LEFT);
+        do {
+            $code = str_pad((string) random_int(0, 999999), 6, '0', STR_PAD_LEFT);
+        } while (hash_equals($challenge->token_hash, hash_hmac('sha256', $code, $plainPollToken)));
         $newTokenHash = hash_hmac('sha256', $code, $plainPollToken);
 
-        $challenge->update([
+        $previous = $challenge->only(['token_hash', 'expires_at', 'approved_at', 'updated_at']);
+
+        $updated = LoginEmailChallenge::query()->whereKey($challenge->getKey())
+            ->where('poll_token_hash', $pollTokenHash)
+            ->where('token_hash', $challenge->token_hash)->update([
             'token_hash' => $newTokenHash,
             'expires_at' => now()->addMinutes(max(
                 1,
@@ -47,11 +58,20 @@ class LoginEmailChallengeService
             )),
             'approved_at' => null,
         ]);
+        if (! $updated) {
+            throw new \RuntimeException('This sign-in request has changed. Please sign in again.');
+        }
 
-        $user->notify(new ConfirmLoginNotification($code));
+        try {
+            return AuthenticationMailDelivery::queue($user, new ConfirmLoginNotification($code));
+        } catch (Throwable $exception) {
+            LoginEmailChallenge::query()->whereKey($challenge->getKey())
+                ->where('token_hash', $newTokenHash)->update($previous);
+            throw $exception;
+        }
     }
 
-    public function send(User $user, bool $rememberMe): string
+    public function send(User $user, bool $rememberMe): array
     {
         EmailVerificationController::assertMailCanBeDelivered();
 
@@ -110,7 +130,7 @@ class LoginEmailChallengeService
         });
 
         try {
-            $user->notify(new ConfirmLoginNotification($code));
+            $receipt = AuthenticationMailDelivery::queue($user, new ConfirmLoginNotification($code));
         } catch (Throwable $exception) {
             DB::transaction(function () use ($user, $tokenHash, $previousChallenge): void {
                 $challenge = LoginEmailChallenge::query()
@@ -133,6 +153,6 @@ class LoginEmailChallengeService
             throw $exception;
         }
 
-        return $plainPollToken;
+        return ['poll_token' => $plainPollToken, 'delivery_token' => $receipt];
     }
 }

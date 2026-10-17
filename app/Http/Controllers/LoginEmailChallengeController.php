@@ -5,6 +5,7 @@ namespace App\Http\Controllers;
 use App\Models\LoginEmailChallenge;
 use App\Models\User;
 use App\Services\LoginEmailChallengeService;
+use Illuminate\Http\Exceptions\HttpResponseException;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\RateLimiter;
@@ -18,17 +19,22 @@ class LoginEmailChallengeController extends Controller
         ]);
 
         try {
-            $service->resend($data['poll_token']);
-        } catch (\RuntimeException $e) {
+            $receipt = $service->resend($data['poll_token']);
+        } catch (HttpResponseException $exception) {
+            throw $exception;
+        } catch (\Throwable $exception) {
+            report($exception);
+
             return response()->json([
                 'success' => false,
-                'message' => $e->getMessage(),
-            ], 422);
+                'message' => 'The sign-in email could not be queued. Please try again.',
+            ], 503);
         }
 
         return response()->json([
             'success' => true,
-            'message' => 'A new sign-in code has been sent to your email.',
+            'message' => 'A new sign-in email is queued. Please check your inbox shortly.',
+            'email_delivery_token' => $receipt,
         ]);
     }
 

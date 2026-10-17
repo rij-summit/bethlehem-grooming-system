@@ -321,6 +321,7 @@ var API = (() => {
   function clearPendingLoginConfirmation() {
     safeStorageRemove(sessionStorage, LOGIN_POLL_TOKEN_KEY);
     safeStorageRemove(sessionStorage, LOGIN_CONFIRMATION_EMAIL_KEY);
+    safeStorageRemove(sessionStorage, "pending_login_email_delivery");
   }
 
   function storePendingLoginConfirmation(pollToken, email = "") {
@@ -1014,7 +1015,9 @@ var API = (() => {
     // payload: { first_name, last_name, username?, email, phone, password, password_confirmation }
     // Registration establishes a browser session only after the customer
     // enters the verification code sent to their email address.
-    return request("POST", "/register", payload);
+    const data = await request("POST", "/register", payload);
+    storeEmailDelivery("registration", data.email_delivery_token);
+    return data;
   }
 
   async function signIn(identifier, password, remember = true) {
@@ -1032,6 +1035,7 @@ var API = (() => {
 
     if (data?.requires_login_confirmation) {
       storePendingLoginConfirmation(data?.login_poll_token, data?.email);
+      storeEmailDelivery("login", data.email_delivery_token);
       return data;
     }
 
@@ -1084,7 +1088,9 @@ var API = (() => {
   }
 
   async function updatePendingRegistration(payload, registrationToken) {
-    return request("PUT", "/register/pending", { ...payload, registration_token: registrationToken });
+    const data = await request("PUT", "/register/pending", { ...payload, registration_token: registrationToken });
+    storeEmailDelivery("registration", data.email_delivery_token);
+    return data;
   }
 
   async function verifyEmail(emailOrLegacyToken, code) {
@@ -1117,7 +1123,28 @@ var API = (() => {
 
   async function resendVerification(email) {
     // POST /api/email/resend  { email }
-    return request("POST", "/email/resend", { email });
+    const data = await request("POST", "/email/resend", {
+      email,
+      registration_token: safeStorageGet(sessionStorage, "pendingRegistrationEditToken") || undefined,
+    });
+    storeEmailDelivery("registration", data.email_delivery_token);
+    return data;
+  }
+
+  function storeEmailDelivery(kind, receipt) {
+    const key = `pending_${kind}_email_delivery`;
+    safeStorageRemove(sessionStorage, key);
+    if (receipt) {
+      try { sessionStorage.setItem(key, receipt); } catch { /* Verification remains available. */ }
+    }
+  }
+
+  function getEmailDeliveryToken(kind) {
+    return safeStorageGet(sessionStorage, `pending_${kind}_email_delivery`) || "";
+  }
+
+  function emailDeliveryStatus(receipt) {
+    return request("POST", "/email/delivery-status", { delivery_token: receipt });
   }
 
   async function resendLoginCode() {
@@ -1125,7 +1152,9 @@ var API = (() => {
     if (!pollToken) {
       throw new Error("This browser no longer has a pending sign-in. Please sign in again.");
     }
-    return request("POST", "/email/login/resend", { poll_token: pollToken });
+    const data = await request("POST", "/email/login/resend", { poll_token: pollToken });
+    storeEmailDelivery("login", data.email_delivery_token);
+    return data;
   }
 
   async function confirmLoginCode(code) {
@@ -2335,6 +2364,8 @@ var API = (() => {
     adminGetPetProfile,
     adminGetPetCaseDetails,
     resendVerification,
+    getEmailDeliveryToken,
+    emailDeliveryStatus,
     resendLoginCode,
     confirmLoginCode,
     hasPendingLoginConfirmation,

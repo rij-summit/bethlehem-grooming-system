@@ -513,7 +513,7 @@ function testBackForwardCacheGuard() {
   assert.equal(browser.replacements.at(-1), "/pages/client/sign-in.html");
 }
 
-function verificationPageHarness({ search, hash, pendingLogin = false }) {
+function verificationPageHarness({ search, hash, pendingLogin = false, role = 'customer', deliveryStatus = null }) {
   const source = fs.readFileSync(
     path.join(projectRoot, "scripts/auth/client/verify-email.js"),
     "utf8",
@@ -568,9 +568,11 @@ function verificationPageHarness({ search, hash, pendingLogin = false }) {
       },
       async confirmLoginCode(code) {
         events.push({ type: "confirm-login-code", code });
-        return { token: "customer-token", user: { role: "customer" } };
+        return { token: "confirmed-token", user: { role } };
       },
       hasPendingLoginConfirmation: () => pendingLogin,
+      getEmailDeliveryToken: () => deliveryStatus ? 'private-delivery-receipt' : '',
+      emailDeliveryStatus: async () => ({ status: deliveryStatus }),
       getPendingLoginConfirmationEmail: () => "customer@example.com",
       resendVerification: async () => ({}),
       async resendLoginCode() {
@@ -599,10 +601,11 @@ function verificationPageHarness({ search, hash, pendingLogin = false }) {
       return id;
     },
     clearInterval(id) { intervals.delete(id); },
-    window: { location },
+    window: { location, clearTimeout() {} },
   };
 
   vm.createContext(context);
+  vm.runInContext(fs.readFileSync(path.join(projectRoot, 'scripts/auth/email-delivery.js'), 'utf8'), context);
   vm.runInContext(source, context, {
     filename: "scripts/auth/client/verify-email.js",
   });
@@ -696,6 +699,19 @@ async function testLoginCodeResendCooldownAndLimit() {
     assert.equal(resend.disabled, attempt === 3);
   }
   assert.match(page.elements.get("loginCodeMessage").textContent, /Too many resend attempts/);
+}
+
+async function testLoginDeliveryErrorsAndPrivilegedRedirects() {
+  const failed = verificationPageHarness({ search: '?mode=login', hash: '', pendingLogin: true, deliveryStatus: 'failed' });
+  await new Promise(resolve => setImmediate(resolve));
+  assert.match(failed.elements.get('loginCodeMessage').textContent, /could not be sent/);
+  assert.equal(failed.events.some(event => event.type === 'redirect'), false);
+  for (const role of ['staff', 'admin']) {
+    const page = verificationPageHarness({ search: '?mode=login', hash: '', pendingLogin: true, role });
+    page.elements.get('loginCode').value = '012345';
+    await page.dispatch('loginCodeForm', 'submit');
+    assert.ok(page.events.some(event => event.type === 'redirect' && event.target === '../admin/dashboard.html'));
+  }
 }
 
 async function testPasswordResetEmailHandoff() {
@@ -1061,6 +1077,7 @@ async function testStaffSetupUsernameForm() {
   testVerificationCredentialsAreScrubbedBeforeUse();
   await testLoginCodeIsEnteredOnTheOriginalTab();
   await testLoginCodeResendCooldownAndLimit();
+  await testLoginDeliveryErrorsAndPrivilegedRedirects();
   await testPasswordResetEmailHandoff();
   testStaticAuthContracts();
   console.log("frontend auth/session regression checks passed");

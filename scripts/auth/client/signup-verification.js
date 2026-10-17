@@ -24,6 +24,23 @@ document.addEventListener("DOMContentLoaded", () => {
   let completed = false;
   const until = { email: Number(read("pendingVerificationResendUntil")) || 0, sms: 0 };
   let timer = null;
+  let stopDeliveryCheck = () => {};
+
+  function checkDelivery(receipt) {
+    stopDeliveryCheck();
+    if (!receipt) return;
+    stopDeliveryCheck = window.AuthenticationEmailDelivery.watch(receipt, (status) => {
+      if (completed || channel !== "email") return;
+      if (status === "queued") description.textContent = `Your verification email for ${email} is queued. Enter the code when it arrives.`;
+      if (status === "sent") description.textContent = `We sent a 6-digit verification code to ${email}.`;
+      if (status === "failed" || status === "delayed") {
+        description.textContent = `Enter the verification code for ${email} when it arrives.`;
+        setMessage(status === "failed"
+          ? "The code could not be sent. Please try Resend Code."
+          : "Your email is taking longer than expected. Please try Resend Code shortly.");
+      }
+    });
+  }
 
   // These adapters are the only delivery boundary. SMS intentionally has no
   // endpoint, code generation, verification result, or account/session mutation.
@@ -86,12 +103,14 @@ document.addEventListener("DOMContentLoaded", () => {
     title.textContent = channel === "email" ? "Verify your email" : "Verify your mobile number";
     document.title = `${title.textContent} | Bethlehem Animal Clinic`;
     description.textContent = channel === "email"
-      ? `We sent a 6-digit verification code to ${email || "your email address"}.`
+      ? `Enter the 6-digit verification code for ${email || "your email address"}.`
       : `We'll send a 6-digit verification code to ${phone.slice(0, 4)} ••• ••${phone.slice(-2)}.`;
     switchChannel.textContent = channel === "email" ? "Use SMS instead" : "Use email instead";
     recovery.classList.toggle("hidden", !!email || channel !== "email");
     otp.clear();
     scheduleCountdown();
+    if (channel === "email") checkDelivery(API.getEmailDeliveryToken("registration"));
+    else stopDeliveryCheck();
     input.focus();
   }
 
@@ -104,7 +123,7 @@ document.addEventListener("DOMContentLoaded", () => {
     }
     email = recoveryEmail.value.trim().toLowerCase();
     write("pendingVerificationEmail", email);
-    description.textContent = `We sent a 6-digit verification code to ${email}.`;
+    description.textContent = `Enter the 6-digit verification code for ${email}.`;
     recovery.classList.add("hidden");
     return true;
   }
@@ -124,6 +143,7 @@ document.addEventListener("DOMContentLoaded", () => {
       const result = await actions[channel].send();
       otp.clear();
       startCooldown(result?.resend_after);
+      if (channel === "email") checkDelivery(result?.email_delivery_token);
       if (result?.delivered === false) setMessage("We couldn't send a text message. Use email to finish creating your account.");
     } catch (error) {
       setMessage(error?.status === 429 ? "Please wait before requesting another code." : "The code could not be sent. Please try again.");
@@ -151,8 +171,9 @@ document.addEventListener("DOMContentLoaded", () => {
         throw new Error("Invalid or expired verification code.");
       }
       completed = true;
+      stopDeliveryCheck();
       otp.clear();
-      for (const key of ["pendingVerificationEmail", "pendingVerificationPhone", "pendingRegistrationEditToken", "pendingSignupDetails", "pendingVerificationResendUntil", "pendingVerificationDeliveryFailed"]) {
+      for (const key of ["pendingVerificationEmail", "pendingVerificationPhone", "pendingRegistrationEditToken", "pendingSignupDetails", "pendingVerificationResendUntil", "pendingVerificationDeliveryFailed", "pending_registration_email_delivery"]) {
         try { sessionStorage.removeItem(key); } catch { /* storage unavailable */ }
       }
       if (timer) window.clearInterval(timer);

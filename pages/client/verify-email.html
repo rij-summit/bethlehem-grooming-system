@@ -74,7 +74,7 @@
             </div>
             <h2 class="text-2xl font-bold text-slate-800">Confirm Your Sign-In</h2>
             <p class="mt-3 text-sm leading-relaxed text-slate-500">
-              Enter the 6-digit code sent to
+              Enter the 6-digit sign-in code for
               <span id="loginCodeEmail" class="font-semibold text-slate-700"></span>.
             </p>
             <form id="loginCodeForm" class="mt-6 space-y-3">
@@ -155,9 +155,10 @@
       </div>
     </div>
 
-    <script src="../../scripts/api.js?v=signup-code-20261005&auth=session-scope-20261006" defer></script>
+    <script src="../../scripts/api.js?v=email-auth-20261018&auth=session-scope-20261006" defer></script>
+    <script src="../../scripts/auth/email-delivery.js?v=email-auth-20261018" defer></script>
     <script src="../../scripts/auth/verification-code.js?v=signup-code-20261005" defer></script>
-    <script src="../../scripts/auth/client/signup-verification.js?v=signup-code-20261005&release=verification-footer-gap-20261005" defer></script>
-    <script src="../../scripts/auth/client/verify-email.js?v=signup-code-20261005" defer></script>
+    <script src="../../scripts/auth/client/signup-verification.js?v=email-auth-20261018&release=verification-footer-gap-20261005" defer></script>
+    <script src="../../scripts/auth/client/verify-email.js?v=email-auth-20261018" defer></script>
   </body>
 </html>

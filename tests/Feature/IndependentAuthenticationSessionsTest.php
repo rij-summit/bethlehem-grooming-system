@@ -4,9 +4,11 @@ namespace Tests\Feature;
 
 use App\Models\Service;
 use App\Models\User;
+use App\Notifications\ConfirmLoginNotification;
 use Illuminate\Database\Schema\Blueprint;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Schema;
+use Illuminate\Support\Facades\Notification;
 use PHPUnit\Framework\Attributes\DataProvider;
 use Tests\TestCase;
 
@@ -15,6 +17,7 @@ class IndependentAuthenticationSessionsTest extends TestCase
     protected function setUp(): void
     {
         parent::setUp();
+        Notification::fake();
 
         Schema::create('users', function (Blueprint $table) {
             $table->increments('user_id');
@@ -33,6 +36,16 @@ class IndependentAuthenticationSessionsTest extends TestCase
             $table->text('abilities')->nullable();
             $table->timestamp('last_used_at')->nullable();
             $table->timestamp('expires_at')->nullable();
+            $table->timestamps();
+        });
+        Schema::create('login_email_challenges', function (Blueprint $table) {
+            $table->id();
+            $table->unsignedInteger('user_id')->unique();
+            $table->string('token_hash', 64)->unique();
+            $table->string('poll_token_hash', 64)->nullable()->unique();
+            $table->boolean('remember_me')->default(true);
+            $table->timestamp('expires_at');
+            $table->timestamp('approved_at')->nullable();
             $table->timestamps();
         });
         Schema::create('services', function (Blueprint $table) {
@@ -61,7 +74,7 @@ class IndependentAuthenticationSessionsTest extends TestCase
 
     protected function tearDown(): void
     {
-        foreach (['services', 'personal_access_tokens', 'users'] as $table) {
+        foreach (['services', 'personal_access_tokens', 'login_email_challenges', 'users'] as $table) {
             Schema::dropIfExists($table);
         }
         parent::tearDown();
@@ -71,8 +84,14 @@ class IndependentAuthenticationSessionsTest extends TestCase
     {
         $this->app['auth']->forgetGuards();
 
-        return $this->postJson('/api/sign-in', [
+        $pending = $this->postJson('/api/sign-in', [
             'identifier' => "$role@example.test", 'password' => 'SessionTest!123',
+        ])->assertAccepted()->assertJsonMissingPath('token');
+        $user = User::where('role', $role)->firstOrFail();
+        $code = Notification::sent($user, ConfirmLoginNotification::class)->last()->code;
+
+        return $this->postJson('/api/email/login/confirm', [
+            'poll_token' => $pending->json('login_poll_token'), 'code' => $code,
         ])->assertOk()->assertJsonPath('user.role', $role)->json('token');
     }
 

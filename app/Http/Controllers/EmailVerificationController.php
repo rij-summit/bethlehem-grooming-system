@@ -5,6 +5,7 @@ namespace App\Http\Controllers;
 use App\Models\PendingCustomerRegistration;
 use App\Models\User;
 use App\Services\RegistrationEmailCodeService;
+use App\Services\AuthenticationMailDelivery;
 use Illuminate\Http\Exceptions\HttpResponseException;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Http\Request;
@@ -202,7 +203,7 @@ class EmailVerificationController extends Controller
 
         if ($registrant) {
             try {
-                self::sendVerificationEmail($registrant);
+                $receipt = self::sendVerificationEmail($registrant);
             } catch (HttpResponseException $exception) {
                 throw $exception;
             } catch (Throwable $exception) {
@@ -217,14 +218,31 @@ class EmailVerificationController extends Controller
 
         return response()->json([
             'success' => true,
-            'message' => 'If that email is registered and unverified, a new verification code has been sent.',
+            'message' => 'If that email is registered and unverified, a new verification email is queued.',
+            // Only the private signup tab may inspect delivery. Public recovery
+            // responses must not reveal whether an address is registered.
+            'email_delivery_token' => $registrant instanceof PendingCustomerRegistration
+                && is_string($request->input('registration_token'))
+                && $registrant->registration_edit_token_hash
+                && hash_equals($registrant->registration_edit_token_hash, hash('sha256', $request->input('registration_token')))
+                    ? ($receipt ?? null) : null,
             'resend_after' => RegistrationEmailCodeService::COOLDOWN_SECONDS,
         ]);
     }
 
-    public static function sendVerificationEmail(User|PendingCustomerRegistration $registrant): void
+    public function deliveryStatus(Request $request)
     {
-        app(RegistrationEmailCodeService::class)->send($registrant);
+        $data = $request->validate(['delivery_token' => 'required|string|size:64']);
+
+        return response()->json([
+            'success' => true,
+            'status' => AuthenticationMailDelivery::status($data['delivery_token']),
+        ])->header('Cache-Control', 'no-store');
+    }
+
+    public static function sendVerificationEmail(User|PendingCustomerRegistration $registrant): string
+    {
+        return app(RegistrationEmailCodeService::class)->send($registrant);
     }
 
     private static function invalidCode()
@@ -258,12 +276,15 @@ class EmailVerificationController extends Controller
             return;
         }
 
+        RegistrationEmailCodeService::assertMailerDoesNotLogCodes();
+
         $mailer = (string) config('mail.default');
         $frontendUrl = (string) config('app.frontend_url');
         $fromAddress = Str::lower((string) config('mail.from.address'));
         $smtpHost = Str::lower((string) config('mail.mailers.smtp.host'));
 
-        $invalidMailer = in_array($mailer, ['log', 'array'], true);
+        $invalidMailer = in_array($mailer, ['log', 'array'], true)
+            || in_array(config('queue.default'), ['null'], true);
         $invalidFrontendUrl = parse_url($frontendUrl, PHP_URL_SCHEME) !== 'https';
         $placeholderSender = $fromAddress === ''
             || str_ends_with($fromAddress, '@example.com');

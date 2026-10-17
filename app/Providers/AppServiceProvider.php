@@ -23,6 +23,8 @@ class AppServiceProvider extends ServiceProvider
      */
     public function boot(): void
     {
+        RateLimiter::for('email-delivery-status', fn ($request) => Limit::perMinute(60)->by($request->ip()));
+
         foreach (['registration-verify' => [10, 1], 'registration-resend' => [3, 10]] as $name => [$attempts, $minutes]) {
             RateLimiter::for($name, fn ($request) => Limit::perMinutes($minutes, $attempts)
                 ->by($request->ip())

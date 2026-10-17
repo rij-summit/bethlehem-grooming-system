@@ -93,7 +93,7 @@ class AuthController extends Controller
         });
 
         try {
-            EmailVerificationController::sendVerificationEmail($pendingRegistration);
+            $receipt = EmailVerificationController::sendVerificationEmail($pendingRegistration);
         } catch (Throwable $exception) {
             report($exception);
 
@@ -115,6 +115,7 @@ class AuthController extends Controller
             'message' => 'Please check your email to complete account registration.',
             'requires_verification' => true,
             'email_delivery_queued' => true,
+            'email_delivery_token' => $receipt,
             'email' => $pendingRegistration->email,
             'registration_token' => $editToken,
             'resend_after' => 45,
@@ -122,7 +123,7 @@ class AuthController extends Controller
     }
 
     // ── UNIFIED SIGN-IN ───────────────────────────────────
-    public function signIn(Request $request/*, LoginEmailChallengeService $loginChallenges*/)
+    public function signIn(Request $request, LoginEmailChallengeService $loginChallenges)
     {
         $request->merge([
             'identifier' => trim((string) $request->input('identifier')),
@@ -225,11 +226,10 @@ class AuthController extends Controller
                 'email' => $user->email,
             ], 403);
         }
-    
+
         if (in_array($user->role, ['customer', 'admin', 'staff'], true)) {
             $confirmationThrottleKey = 'login-confirmation:'
                 .hash('sha256', $user->user_id.'|'.$request->ip());
-/*
             if (RateLimiter::tooManyAttempts($confirmationThrottleKey, 3)) {
                 $seconds = RateLimiter::availableIn($confirmationThrottleKey);
 
@@ -239,9 +239,9 @@ class AuthController extends Controller
                     'retry_after' => $seconds,
                 ], 429)->header('Retry-After', (string) $seconds);
             }
-/*
+
             try {
-                $pollToken = $loginChallenges->send(
+                $challenge = $loginChallenges->send(
                     $user,
                     (bool) ($data['remember'] ?? true),
                 );
@@ -253,22 +253,22 @@ class AuthController extends Controller
                     'message' => 'Your credentials were confirmed, but the login confirmation email could not be queued. Please try again.',
                 ], 503);
             }
-*/
+
             RateLimiter::hit($confirmationThrottleKey, 600);
             RateLimiter::clear($throttleKey);
-/*
+
             return response()->json([
                 'success' => true,
                 'code' => 'login_confirmation_required',
-                'message' => 'Enter the code sent to your email to complete sign-in.',
+                'message' => 'Your sign-in email is queued. Enter the code when it arrives.',
                 'requires_login_confirmation' => true,
                 'email_delivery_queued' => true,
-                'login_poll_token' => $pollToken,
+                'email_delivery_token' => $challenge['delivery_token'],
+                'login_poll_token' => $challenge['poll_token'],
                 'email' => $user->email,
             ], 202);
-            */
         }
-        
+
         RateLimiter::clear($throttleKey);
         $tokenName = 'admin_token';
         $token = $user->createToken($tokenName)->plainTextToken;

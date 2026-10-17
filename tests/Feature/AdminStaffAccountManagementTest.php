@@ -9,6 +9,7 @@ use App\Models\PendingStaffAccount;
 use App\Models\PasswordResetRequest;
 use App\Models\User;
 use App\Notifications\SetUpStaffPasswordNotification;
+use App\Notifications\ConfirmLoginNotification;
 use App\Services\PendingStaffAccountService;
 use Illuminate\Database\Events\TransactionRolledBack;
 use Illuminate\Database\Schema\Blueprint;
@@ -215,10 +216,8 @@ class AdminStaffAccountManagementTest extends TestCase
         $this->assertNotNull($staff->email_verified_at);
         $this->assertTrue(Hash::check('CreatedPassword!234', $staff->password_hash));
         $this->assertDatabaseCount('password_reset_requests', 0);
-        $this->postJson('/api/sign-in', [
-            'identifier' => 'Clinic_Staff',
-            'password' => 'CreatedPassword!234',
-        ])->assertOk()->assertJsonPath('user.role', 'staff');
+        $this->signInWithCode($staff, 'Clinic_Staff', 'CreatedPassword!234')
+            ->assertJsonPath('user.role', 'staff');
 
         $this->postJson('/api/staff/password-setup/complete', [
             'token' => $plainToken,
@@ -671,10 +670,7 @@ class AdminStaffAccountManagementTest extends TestCase
         app('auth')->forgetGuards();
         $this->withToken($staffToken)->getJson('/api/settings/security/account')->assertUnauthorized();
         app('auth')->forgetGuards();
-        $login = $this->postJson('/api/sign-in', [
-            'identifier' => 'Staff',
-            'password' => 'CurrentStaff!234',
-        ])->assertOk()
+        $login = $this->signInWithCode($staff, 'Staff', 'CurrentStaff!234')
             ->assertJsonPath('user.staff_type', $to === 'grooming_receptionist' ? 'grooming' : 'clinic')
             ->assertJsonPath('user.staff_subrole', $to)
             ->assertJsonPath('user.clinic_permissions.access', $to !== 'grooming_receptionist')
@@ -917,11 +913,7 @@ class AdminStaffAccountManagementTest extends TestCase
             ->assertJsonPath('staff.is_active', true);
 
         Notification::fake();
-        $this->postJson('/api/sign-in', [
-            'identifier' => 'groomingstaff',
-            'password' => 'CurrentStaff!234',
-        ])
-            ->assertOk()
+        $this->signInWithCode($staff, 'groomingstaff', 'CurrentStaff!234')
             ->assertJsonPath('user.email', 'bethlehem.staff.test@gmail.com');
     }
 
@@ -1139,6 +1131,18 @@ class AdminStaffAccountManagementTest extends TestCase
             'email' => 'invalid@-example..com',
         ])->assertUnprocessable()->assertJsonValidationErrors('email');
         Notification::assertNothingSent();
+    }
+
+    private function signInWithCode(User $staff, string $identifier, string $password): \Illuminate\Testing\TestResponse
+    {
+        Notification::fake();
+        $pending = $this->postJson('/api/sign-in', compact('identifier', 'password'))
+            ->assertAccepted()->assertJsonMissingPath('token');
+        $code = Notification::sent($staff, ConfirmLoginNotification::class)->sole()->code;
+
+        return $this->postJson('/api/email/login/confirm', [
+            'poll_token' => $pending->json('login_poll_token'), 'code' => $code,
+        ])->assertOk();
     }
 
     private function staffSetupLinkSentTo(User $staff): string

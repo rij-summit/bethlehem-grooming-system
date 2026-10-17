@@ -27,6 +27,25 @@ document.addEventListener("DOMContentLoaded", () => {
   let resendCodeTimer = null;
   let resendCodeCount = 0;
   const RESEND_CODE_MAX = 3;
+  let stopDeliveryCheck = () => {};
+  let deliveryMessage = "";
+
+  function checkDelivery(receipt) {
+    stopDeliveryCheck();
+    if (!receipt) return;
+    stopDeliveryCheck = window.AuthenticationEmailDelivery.watch(receipt, (status) => {
+      if (status === "sent") {
+        if (loginCodeMessage.textContent === deliveryMessage) clearLoginCodeMessage();
+        return;
+      }
+      deliveryMessage = status === "queued"
+        ? "Your sign-in email is queued. Enter the code when it arrives."
+        : status === "failed"
+          ? "The sign-in code could not be sent. Please try Resend Code."
+          : "Your email is taking longer than expected. Please try Resend Code shortly.";
+      showLoginCodeMessage(deliveryMessage);
+    });
+  }
 
   function showState(name) {
     [stateVerifying, stateSuccess, statePending, stateLoginCode, stateError]
@@ -97,6 +116,7 @@ document.addEventListener("DOMContentLoaded", () => {
       showState("loginCode");
       loginCodeInput.focus();
       startResendCountdown(60);
+      checkDelivery(API.getEmailDeliveryToken("login"));
     }
   }
 
@@ -117,6 +137,7 @@ document.addEventListener("DOMContentLoaded", () => {
 
     try {
       const response = await API.confirmLoginCode(code);
+      stopDeliveryCheck();
       successTitle.textContent = "Sign-In Confirmed!";
       successMessage.textContent = "Redirecting you to your account…";
       showState("success");
@@ -182,15 +203,16 @@ document.addEventListener("DOMContentLoaded", () => {
       loginCodeResendBtn.disabled = true;
 
       try {
-        await API.resendLoginCode();
+        const result = await API.resendLoginCode();
         resendCodeCount++;
         if (resendCodeCount >= RESEND_CODE_MAX) {
-          showLoginCodeMessage("A new code has been sent. This was your last resend attempt.", "success");
+          showLoginCodeMessage("A new email is queued. This was your last resend attempt.", "success");
           startResendCountdown(60);
         } else {
-          showLoginCodeMessage("A new code has been sent to your email.", "success");
+          showLoginCodeMessage("A new sign-in email is queued. Please check your inbox shortly.", "success");
           startResendCountdown(60);
         }
+        checkDelivery(result?.email_delivery_token);
       } catch (error) {
         loginCodeResendBtn.disabled = false;
         if (error.status === 429) {

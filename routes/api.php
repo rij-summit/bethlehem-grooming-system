@@ -50,6 +50,8 @@ Route::post('/staff/password-setup/request-new-link', [PasswordResetController::
     ->middleware('throttle:3,10');
 Route::post('/email/verify', [EmailVerificationController::class, 'verify'])->middleware('throttle:registration-verify');
 Route::post('/email/resend', [EmailVerificationController::class, 'resend'])->middleware('throttle:registration-resend');
+Route::post('/email/delivery-status', [EmailVerificationController::class, 'deliveryStatus'])
+    ->middleware('throttle:email-delivery-status');
 Route::post('/email/login/confirm', [LoginEmailChallengeController::class, 'confirm'])
     ->middleware('throttle:10,1');
 Route::post('/email/login/resend', [LoginEmailChallengeController::class, 'resend'])
