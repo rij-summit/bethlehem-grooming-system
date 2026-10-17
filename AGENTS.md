@@ -2,13 +2,13 @@
 
 Behavioral guidelines to reduce common LLM coding mistakes. Merge with project-specific instructions as needed.
 
-*Tradeoff:* These guidelines bias toward caution over speed.
+_Tradeoff:_ These guidelines bias toward caution over speed.
 
 - No features beyond what was asked.
 
 ## 1. Think Before Coding
 
-*Don't assume. Don't hide confusion. Surface tradeoffs.*
+_Don't assume. Don't hide confusion. Surface tradeoffs._
 
 Before implementing:
 
@@ -30,7 +30,7 @@ When investigating a task:
 
 ## 3. Simplicity First
 
-*Minimum code that solves the problem. Nothing speculative.*
+_Minimum code that solves the problem. Nothing speculative._
 
 - No features beyond what was asked.
 - No abstractions for single-use code.
@@ -42,36 +42,42 @@ Ask yourself: "Would a senior engineer say this is overcomplicated?" If yes, sim
 
 ## 4. Surgical Changes
 
-*Touch only what you must. Clean up only your own mess.*
+_Keep changes focused, but improve directly related structure when doing so safely reduces duplication or scattered behavior._
 
 When editing existing code:
 
-- Do not refactor unrelated code unless the task requires it.
-- If directly affected code has a clear structural problem that makes the task harder, riskier, or unnecessarily complex, point it out.
-- Apply a refactor only if it is small, contained, and directly supports the task; otherwise ask first.
-- Don't "improve" adjacent code, comments, or formatting.
-- Follow existing project conventions unless they conflict with the requested change or introduce a clear structural problem.
-- If you notice unrelated dead code, mention it — don't delete it.
+- Do not refactor unrelated code merely because it could be improved.
+- Start with the directly affected area, then inspect related consumers and implementations when necessary to understand the requested behavior.
+- If the requested behavior is duplicated, scattered, or implemented inconsistently across related files, prefer consolidating it into an appropriate shared source of truth when the consolidation is reasonably scoped and can preserve existing behavior.
+- Related duplication may be cleaned up even when it spans multiple files, provided those files implement or consume the same behavior relevant to the current task.
+- Do not limit a correct consolidation only to the first file encountered if doing so would leave other active implementations of the same behavior inconsistent.
+- Do not turn a focused task into a repository-wide cleanup. Stop expanding once the directly related implementations and consumers are covered.
+- If consolidation would require a broad architecture migration, large rewrite, or changes across unrelated subsystems, do not perform it implicitly. Identify the larger refactor separately.
+- Don't "improve" unrelated code, comments, formatting, or naming.
+- Follow existing project conventions unless they conflict with the requested change or create a clear structural problem.
+- If you notice unrelated dead code or unrelated duplication, mention it instead of removing it.
 
-Shared Existing Behavior:
+### Shared Existing Behavior
 
-- When the requested behavior already exists elsewhere, inspect and reuse the existing implementation when practical instead of creating duplicate logic.
-- If directly affected code contains separate implementations of the same behavior, consolidate them when a small, contained change can safely create a shared source of truth.
-- Preserve the existing behavior of all affected consumers when consolidating shared code.
-- Only remove duplicate code made unnecessary by that consolidation. Do not search for or clean up unrelated duplication elsewhere in the codebase.
+When the requested behavior already exists elsewhere:
 
-When extracting shared behavior:
+- Inspect and reuse the existing implementation when practical instead of creating another implementation.
+- Search sufficiently to determine whether the same task-related behavior already has multiple implementations.
+- When multiple related implementations can safely share one source of truth, consolidate them rather than adding another variation.
+- Preserve the behavior of all affected consumers during consolidation.
+- Remove only duplication made unnecessary by that consolidation.
+- Prefer an existing shared location when one is already appropriate.
+- If no suitable shared location exists, create a clearly named shared file only when multiple real consumers justify it.
+- Do not create abstractions, files, or folders for hypothetical future reuse.
 
-- Place it in the project's existing appropriate shared location when one already exists.
-- If no suitable shared location exists, create a clearly named shared file in the appropriate existing project location.
-- Do not create a new folder or file solely for organization if the logic is small, single-use, or naturally belongs in an existing component.
+The goal is incremental improvement: each task should leave the directly affected area at least as maintainable as before and, when practical, less duplicated or scattered without requiring a large unrelated refactor.
 
-When your changes create orphans:
+### When Your Changes Create Orphans
 
-- Remove imports, variables, or functions made unused by your changes.
-- Don't remove pre-existing dead code unless asked.
+- Remove imports, variables, functions, styles, or files made unused by your changes.
+- Don't remove pre-existing unrelated dead code unless asked.
 
-The test: Every changed line should trace directly to the user's request or be necessary cleanup caused by the requested change.
+The test: every changed line should either implement the requested behavior, consolidate directly related existing behavior, or be necessary cleanup caused by those changes.
 
 ## 5. System Performance Awareness
 
@@ -79,18 +85,18 @@ The test: Every changed line should trace directly to the user's request or be n
 
 For all implementation tasks:
 
- - Do not introduce unnecessary database queries, network requests, re-renders, DOM work, or repeated computations.
- - Watch for N+1 queries — use eager loading (with()) instead of querying inside a loop, whether in a controller, model accessor, or Blade @foreach.
- - Avoid changes that noticeably worsen page load or interaction performance. Treat any query added inside a loop over user-facing data as significant.
- - Reuse already-loaded data when appropriate instead of fetching the same data repeatedly.
- - Prefer paginating large result sets over loading full tables.
- - Avoid loading unrelated features or data for the current page/tab when they are not needed.
- - If the requested implementation would create a significant performance problem, explain the tradeoff briefly and propose a simpler, efficient approach before implementing.
- - Do not perform unrelated performance refactors unless the task specifically asks for optimization.
+- Do not introduce unnecessary database queries, network requests, re-renders, DOM work, or repeated computations.
+- Watch for N+1 queries — use eager loading (with()) instead of querying inside a loop, whether in a controller, model accessor, or Blade @foreach.
+- Avoid changes that noticeably worsen page load or interaction performance. Treat any query added inside a loop over user-facing data as significant.
+- Reuse already-loaded data when appropriate instead of fetching the same data repeatedly.
+- Prefer paginating large result sets over loading full tables.
+- Avoid loading unrelated features or data for the current page/tab when they are not needed.
+- If the requested implementation would create a significant performance problem, explain the tradeoff briefly and propose a simpler, efficient approach before implementing.
+- Do not perform unrelated performance refactors unless the task specifically asks for optimization.
 
 ## 6. Frontend Performance
 
-*Measure first. Optimize the actual bottleneck. Preserve behavior.*
+_Measure first. Optimize the actual bottleneck. Preserve behavior._
 
 When working on website performance, use Core Web Vitals as performance targets:
 
@@ -143,7 +149,7 @@ accessibility, consistency, or workflow reason to do so.
 
 ## 8. Goal-Driven Execution
 
-*Define success criteria. Loop until verified.*
+_Define success criteria. Loop until verified._
 
 Transform tasks into verifiable goals:
 
@@ -201,6 +207,72 @@ Do not create superficial source-string, markup-presence, or implementation-deta
 tests solely to satisfy TDD. Prefer observable behavior and the project's existing
 test conventions.
 
+## 10. Codebase Structure and File Organization
+
+**Improve the structure gradually as development exposes real problems. Avoid both uncontrolled accumulation and oversized refactors.**
+
+Use the `writing-plans` skill when a task involves a substantial structural change, such as:
+
+- reorganizing multiple related folders or files
+- splitting an oversized or mixed-responsibility file
+- consolidating behavior scattered across many related files
+- restructuring CSS, JavaScript, Blade, controllers, services, or other modules
+- planning a meaningful multi-file refactor where dependencies or migration order matter
+
+The `writing-plans` skill is advisory for structural reasoning. The user's request and this `AGENTS.md` remain the authority for scope and execution.
+
+### Incremental Structural Improvement
+
+During ordinary development, do not merely avoid making existing structural problems worse.
+
+When working on a feature or behavior:
+
+- Notice whether the directly related implementation is unnecessarily scattered, duplicated, or placed in clearly inappropriate files.
+- If the related code can be consolidated safely within a reasonable scope, prefer improving it as part of the task rather than adding another duplicate implementation.
+- Follow the behavior through its actual related consumers when necessary; file boundaries alone do not define the task boundary.
+- Prefer one clear source of truth for the same behavior when multiple active implementations are unnecessary.
+- Prefer files with a clear responsibility when an existing file has accumulated unrelated concerns.
+- Keep closely related code together when that matches how the feature is actually maintained.
+- Reuse established project folders and conventions when they remain appropriate.
+
+### Refactor Boundary
+
+Incremental improvement must remain understandable and verifiable.
+
+Do not:
+
+- perform a repository-wide cleanup because one task exposed a structural problem
+- reorganize unrelated modules
+- introduce a new architecture solely because it appears cleaner
+- split code into excessive tiny files
+- create abstractions without multiple real consumers
+- migrate large parts of the codebase in one task when the same improvement can be made safely in stages
+
+If the ideal consolidation is too broad or risky for the current task:
+
+1. complete the safe directly related portion when useful
+2. preserve compatibility with the remaining code
+3. identify the remaining structural work separately instead of forcing the entire migration into one change
+
+### Structural Safety
+
+When moving, splitting, or consolidating code:
+
+- inspect actual dependencies before changing locations
+- preserve behavior and business rules
+- preserve routes, imports, asset references, public interfaces, and build behavior
+- for CSS, preserve loading order, cascade, specificity, responsive behavior, and print behavior
+- verify all affected consumers after consolidation
+- avoid temporary duplicate implementations unless they are genuinely needed for a staged migration
+
+For small, obvious consolidations, do not invoke `writing-plans` merely because several files are touched.
+
+Use `writing-plans` when the structural decision itself is complex enough that mapping files, responsibilities, dependencies, and migration steps first would reduce risk.
+
+Do not automatically adopt optional skill workflow conventions such as creating worktrees, making commits, or changing the execution process unless the user or task specifically requires them.
+
+The goal is not a perfectly organized repository after every task. The goal is for development to **progressively reduce task-related duplication and structural debt without creating risky, oversized refactors.**
+
 ---
 
-*These guidelines are working if:* fewer unnecessary changes in diffs, fewer rewrites due to overcomplication, and clarifying questions come before implementation rather than after mistakes.
+_These guidelines are working if:_ fewer unnecessary changes in diffs, fewer rewrites due to overcomplication, and clarifying questions come before implementation rather than after mistakes.
