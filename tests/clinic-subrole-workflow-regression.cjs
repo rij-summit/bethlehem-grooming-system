@@ -27,7 +27,7 @@ const sandbox = {
   crypto: webcrypto, URLSearchParams, setTimeout, clearTimeout,
 };
 vm.createContext(sandbox);
-for (const file of ['cash-payment.js', 'admin-clinic.js', 'admin-clinic-case-workspace.js', 'admin-vaccinations.js', 'admin-sidebar.js']) {
+for (const file of ['clinic-feedback.js', 'cash-payment.js', 'admin-clinic.js', 'admin-clinic-case-workspace.js', 'admin-vaccinations.js', 'admin-sidebar.js']) {
   vm.runInContext(fs.readFileSync(path.join(root, 'scripts/components', file), 'utf8'), sandbox, {
     filename: path.join(root, 'scripts/components', file),
     importModuleDynamically: vm.constants.USE_MAIN_CONTEXT_DEFAULT_LOADER,

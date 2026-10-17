@@ -1,5 +1,5 @@
 import { formatSavedWeight } from "./pet-weight-size.js?v=pet-weight-size-20261011-v3";
-import { renderEstimateReview } from "./grooming-estimate-selection.js";
+import { renderEstimateReview } from "./grooming-estimate-selection.js?catalog=services-20261017-2";
 import { loadPetGroomers, hasPetGroomerSelection, petGroomerLabel } from "./pet-groomer-selection.js";
 import {
   BOOKING_STEP_THREE_KEY,
@@ -22,7 +22,7 @@ import {
   formatPriceOption,
   getPackageById,
   normalizeStepThreeDraft,
-} from "../services/grooming-service.js?v=grooming-pricing-20261006&flow=grooming-order-20261016&groomers=named-20261016";
+} from "../services/grooming-service.js?v=managed-services-20261017-2";
 
 /**
  * Booking Review Step Controller

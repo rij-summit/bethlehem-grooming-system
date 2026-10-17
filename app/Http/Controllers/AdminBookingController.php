@@ -1481,7 +1481,7 @@ class AdminBookingController extends Controller
                     'name' => $bs->service?->service_name ?? '—',
                     'serviceKind' => $bs->addon_id !== null
                         ? 'ala_carte'
-                        : (config('grooming_services.services.'.($bs->service?->slug ?? '').'.kind') === 'package'
+                        : ($bs->service?->kind === 'package'
                             ? 'package' : 'ala_carte'),
                     'priceAtBooking' => $bs->price_at_booking,
                     'price_at_booking' => $bs->price_at_booking,

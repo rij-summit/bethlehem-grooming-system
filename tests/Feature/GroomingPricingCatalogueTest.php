@@ -35,6 +35,7 @@ class GroomingPricingCatalogueTest extends TestCase
         }
         (require base_path('database/migrations/2026_10_06_000001_add_starting_price_sizes_to_services.php'))->up();
         (require base_path('database/migrations/2026_10_06_000002_add_range_price_maximums_to_services.php'))->up();
+        (require base_path('database/migrations/2026_10_17_000001_add_grooming_catalog_management.php'))->up();
         $this->asRole('admin');
     }
 

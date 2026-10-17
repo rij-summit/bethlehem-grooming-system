@@ -11,7 +11,7 @@ const ui = context.adminDashboard();
 
 async function main() {
 const catalogue = JSON.parse(fs.readFileSync(path.join(__dirname, "grooming-catalogue-fixture.json"), "utf8").replace(/^\uFEFF/, "")).data;
-const catalogueModule = "../services/grooming-service.js?v=grooming-pricing-20261006&flow=grooming-order-20261016&groomers=named-20261016";
+const catalogueModule = "../services/grooming-service.js?v=managed-services-20261017-2";
 for (const component of ["admin-dashboard", "booking-services-step", "booking-review-step", "booking-consent-step", "booking-confirmed-step", "grooming-estimate-selection", "grooming-pre-registration", "walk-in-services-step", "walk-in-review-step"]) {
   const componentSource = fs.readFileSync(path.join(__dirname, `../scripts/components/${component}.js`), "utf8");
   assert.ok(componentSource.includes(`"${catalogueModule}"`), `${component} must share the same live catalogue module instance`);
@@ -198,7 +198,7 @@ assert.equal(changedMode.safetyMaxAmount, 450);
 const historicalFixed = ui.normalizePaymentLine({ slug: facial.id, priceAtBooking: "150" }, pet, "old-fixed", { lockFixedPrices: true });
 assert.equal(historicalFixed.isFixedPriceLocked, true);
 assert.equal(historicalFixed.amount, "150.00");
-assert.throws(() => grooming.applyGroomingCatalogue([]), /unavailable/);
+assert.throws(() => grooming.applyGroomingCatalogue([{id: "invalid"}]), /unavailable/);
 
 const legacyRules = ui.normalizePaymentLine({ slug: "ear_cleaning", priceAtBooking: "150",
   paymentPriceRules: { min: "150", max: null, pricing_type: "plus", safety_max: "350" } }, pet, "legacy-server-rules");
@@ -272,6 +272,28 @@ packageLine.amount = "1800";
 assert.equal(ui.paymentLineError(packageLine), "", "Starting-at safety caps do not apply to ranges");
 packageLine.amount = "1800.01";
 assert.equal(ui.paymentLineError(packageLine), "Enter an amount from ₱1,150 to ₱1,800.");
+
+const inactiveCatalogue = structuredClone(updated);
+inactiveCatalogue.find(service => service.id === 'regular_dog_grooming').isActive = false;
+context.applyPaymentCatalogue(grooming.applyGroomingCatalogue(inactiveCatalogue));
+assert.equal(grooming.getPackageById('regular_dog_grooming'), null, 'Inactive packages are unavailable for new selections');
+const inactivePet = {sizeKey: 'small'};
+const inactiveLine = ui.normalizePaymentLine({slug: 'regular_dog_grooming', priceMinAtBooking: '550', priceMaxAtBooking: '550'}, inactivePet, 'inactive', {lockFixedPrices: true});
+inactivePet.sizeKey = 'large';
+ui.refreshPaymentLinePricing(inactivePet, inactiveLine);
+assert.equal(inactiveLine.minAmount, 950, 'Existing bookings can still correct sizes after the package is deactivated');
+
+let billingReads = 0;
+global.API.adminRequest = async (method, url) => {
+  billingReads++;
+  assert.equal(method, 'GET');
+  assert.equal(url, '/grooming/services?include_inactive=1');
+  return {data: inactiveCatalogue};
+};
+const billingCatalogue = await grooming.loadGroomingCatalogue({includeInactive: true});
+assert.equal(billingReads, 1);
+assert.ok(billingCatalogue.some(service => service.id === 'regular_dog_grooming'));
+assert.equal(grooming.getPackageById('regular_dog_grooming'), null);
 
 global.API.getGroomingCatalogue = async () => { throw new Error("Pricing unavailable"); };
 await assert.rejects(grooming.loadGroomingCatalogue(), /unavailable/);

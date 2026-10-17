@@ -19,7 +19,11 @@ foreach (array_keys(config('grooming_services.services')) as $slug) {
         default => ucwords(str_replace('_', ' ', $slug)),
     };
     $service = new Service(['slug' => $slug, 'service_name' => $name, 'base_price' => 0]);
+    $defaults = collect(json_decode(file_get_contents(database_path('data/grooming-catalog.json')), true))->firstWhere('id', $slug);
+    $service->pet_type = $defaults['petType'] ?? 'all';
+    $service->description_items = $defaults['descriptionItems'];
     $entry = $normalizer->invoke($controller, $service, $resolver);
+    $entry['includedAlaCarteServiceIds'] = $defaults['includedAlaCarteServiceIds'] ?? [];
     $entry['serviceId'] = count($catalogue) + 1;
     $catalogue[] = $entry;
 }

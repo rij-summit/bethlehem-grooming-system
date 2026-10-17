@@ -314,7 +314,7 @@ class WalkinController extends Controller
     private function estimateWalkInPet(array $petData, ?string $size): array
     {
         $slugs = array_column($petData['services'], 'service_slug');
-        $packages = array_values(array_intersect($slugs, array_keys(config('grooming_estimates.packages'))));
+        $packages = array_values(array_intersect($slugs, array_keys(app(\App\Services\GroomingTimeEstimate::class)->rules()['packages'])));
         if (count($packages) > 1) {
             throw ValidationException::withMessages(['services' => 'Select one grooming package per pet.']);
         }

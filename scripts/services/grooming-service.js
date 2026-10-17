@@ -5,158 +5,40 @@ import {
   normalizePetType,
 } from "./booking-draft-service.js?flow=grooming-order-20261016";
 
-export const GROOMING_PACKAGES = [
-  {
-    id: "partial_grooming",
-    kind: "package",
-    petType: "dog",
-    name: "Partial Grooming",
-    descriptionItems: [
-      "Trimming, Nail Clipping and Ear Cleaning",
-      "Cologne Spritz and Dry Shampoo",
-    ],
-    priceOptions: [],
-    allowsAlaCarteServices: true,
-    includedAlaCarteServiceIds: ["nail_clipping", "ear_cleaning"],
-  },
-  {
-    id: "regular_dog_grooming",
-    kind: "package",
-    petType: "dog",
-    name: "Regular Dog Grooming",
-    descriptionItems: [
-      "Bathing with Shampoo and Blow Drying",
-      "Summer-cut, Semi-Kalbo, Kalbo or Haircut",
-      "Spot, Sanitary area trim, paw pads, face, belly, or rear",
-      "Nail Clipping, Ear Cleaning and Tooth-brushing",
-    ],
-    priceOptions: [],
-    allowsAlaCarteServices: true,
-    includedAlaCarteServiceIds: [
-      "nail_clipping",
-      "ear_cleaning",
-      "tooth_brushing",
-    ],
-  },
-  {
-    id: "deluxe_dog_grooming",
-    kind: "package",
-    petType: "dog",
-    name: "Deluxe Dog Grooming",
-    descriptionItems: [
-      "Bathing with Shampoo and Blow Drying",
-      "Special haircut (Puppy Cut or Hairstyle of choice)",
-      "Nail Clipping, Ear Cleaning and Tooth-brushing",
-      "Cologne Spritzes",
-    ],
-    priceOptions: [],
-    allowsAlaCarteServices: true,
-    includedAlaCarteServiceIds: [
-      "nail_clipping",
-      "ear_cleaning",
-      "tooth_brushing",
-    ],
-  },
-  {
-    id: "bath_and_go",
-    kind: "package",
-    petType: "dog",
-    name: "Bath and Go!",
-    descriptionItems: [
-      "Bathing with Shampoo and Blow Drying",
-      "Nail Clipping, Ear Cleaning and Tooth-brushing",
-    ],
-    priceOptions: [],
-    allowsAlaCarteServices: true,
-    includedAlaCarteServiceIds: [
-      "nail_clipping",
-      "ear_cleaning",
-      "tooth_brushing",
-    ],
-  },
-  {
-    id: "cat_full_grooming",
-    kind: "package",
-    petType: "cat",
-    name: "Full Grooming",
-    descriptionItems: [
-      "Bathing with Shampoo and Blow Drying",
-      "Haircut (If requested)",
-      "Nail Clipping",
-      "Ear Cleaning",
-    ],
-    priceOptions: [],
-    allowsAlaCarteServices: true,
-    includedAlaCarteServiceIds: ["nail_clipping", "ear_cleaning"],
-  },
-];
-
-export const ALA_CARTE_SERVICES = [
-  {
-    id: "nail_clipping",
-    kind: "ala_carte",
-    petTypes: ["cat", "dog"],
-    name: "Nail Clipping",
-    descriptionItems: [],
-    priceOptions: [],
-  },
-  {
-    id: "ear_cleaning",
-    kind: "ala_carte",
-    petTypes: ["cat", "dog"],
-    name: "Ear Cleaning",
-    descriptionItems: [],
-    priceOptions: [],
-  },
-  {
-    id: "facial_trimming",
-    kind: "ala_carte",
-    petTypes: ["cat", "dog"],
-    name: "Facial Trimming",
-    descriptionItems: [],
-    priceOptions: [],
-  },
-  {
-    id: "anal_sac_draining",
-    kind: "ala_carte",
-    petTypes: ["cat", "dog"],
-    name: "Anal Sac Draining",
-    descriptionItems: [],
-    priceOptions: [],
-  },
-  {
-    id: "tooth_brushing",
-    kind: "ala_carte",
-    petTypes: ["cat", "dog"],
-    name: "Tooth Brushing",
-    descriptionItems: [],
-    priceOptions: [],
-  },
-];
+export const GROOMING_PACKAGES = [];
+export const ALA_CARTE_SERVICES = [];
+const PACKAGE_MAP = new Map();
+const ALA_CARTE_MAP = new Map();
+let catalogueLoaded = false;
 
 export function applyGroomingCatalogue(catalogue) {
-  if (!Array.isArray(catalogue)) throw new Error("Grooming pricing is unavailable.");
-  const metadata = [...GROOMING_PACKAGES, ...ALA_CARTE_SERVICES];
-  const byId = new Map(catalogue.map((service) => [service.id, service]));
-  for (const service of metadata) {
-    const live = byId.get(service.id);
-    if (!live?.priceOptions?.length || live.priceOptions.some((option) =>
+  if (!Array.isArray(catalogue) || catalogue.some((service) =>
+    !service.id || !service.name || !['package', 'ala_carte'].includes(service.kind)
+    || !service.priceOptions?.length || service.priceOptions.some((option) =>
       !Number.isFinite(option.minAmount) || option.minAmount <= 0 ||
-      !["fixed", "range", "starting_at"].includes(option.pricingType))) {
-      throw new Error("Grooming pricing is unavailable. Please retry.");
-    }
+      !['fixed', 'range', 'starting_at'].includes(option.pricingType)))) {
+    throw new Error('Grooming services are unavailable. Please retry.');
   }
-  for (const service of metadata) {
-    const live = byId.get(service.id);
-    service.serviceId = live.serviceId;
-    service.priceOptions = live.priceOptions.map((option) => ({ ...option,
-      pricingType: option.pricingType === "starting_at" ? "plus" : option.pricingType }));
-  }
-  return metadata;
+  const services = catalogue.map((service) => ({ ...service,
+    descriptionItems: [...(service.descriptionItems || [])],
+    includedAlaCarteServiceIds: [...(service.includedAlaCarteServiceIds || [])],
+    priceOptions: service.priceOptions.map((option) => ({ ...option,
+      pricingType: option.pricingType === 'starting_at' ? 'plus' : option.pricingType })),
+  }));
+  GROOMING_PACKAGES.splice(0, GROOMING_PACKAGES.length, ...services.filter((service) => service.kind === 'package' && service.isActive !== false));
+  ALA_CARTE_SERVICES.splice(0, ALA_CARTE_SERVICES.length, ...services.filter((service) => service.kind === 'ala_carte' && service.isActive !== false));
+  PACKAGE_MAP.clear();
+  ALA_CARTE_MAP.clear();
+  GROOMING_PACKAGES.forEach((service) => PACKAGE_MAP.set(service.id, service));
+  ALA_CARTE_SERVICES.forEach((service) => ALA_CARTE_MAP.set(service.id, service));
+  catalogueLoaded = true;
+  return services;
 }
 
-export async function loadGroomingCatalogue() {
-  const response = await API.getGroomingCatalogue();
+export async function loadGroomingCatalogue({includeInactive = false} = {}) {
+  const response = includeInactive
+    ? await API.adminRequest('GET', '/grooming/services?include_inactive=1', null, {force: true, cache: 'no-store'})
+    : await API.getGroomingCatalogue();
   globalThis.GroomingEstimates.configure(response.estimateRules);
   return applyGroomingCatalogue(response.data);
 }
@@ -166,13 +48,6 @@ export function selectedPricingSignature(draft, selections) {
     item.pricing.lineItems.map((line) => ({ id: line.serviceId, size: item.pet.size,
       options: line.pricing.selectedPriceOption || line.pricing.availablePriceOptions }))));
 }
-
-const PACKAGE_MAP = new Map(
-  GROOMING_PACKAGES.map((service) => [service.id, service]),
-);
-const ALA_CARTE_MAP = new Map(
-  ALA_CARTE_SERVICES.map((service) => [service.id, service]),
-);
 
 export function formatPhpAmount(amount) {
   return `₱${Number(amount || 0).toLocaleString("en-PH")}`;
@@ -232,7 +107,7 @@ export function getGroomingPricePresentation(summary) {
 export function getPackagesByPetType(petType) {
   const normalizedType = normalizePetType(petType);
   return GROOMING_PACKAGES.filter(
-    (service) => service.petType === normalizedType,
+    (service) => service.petType === normalizedType || service.petType === "all",
   );
 }
 
@@ -302,6 +177,14 @@ export function sanitizePetServiceSelection(selection) {
         ? selection.specialInstructions
         : "",
   };
+
+  if (catalogueLoaded) {
+    if (!PACKAGE_MAP.has(nextSelection.servicePackage)) {
+      nextSelection.servicePackage = '';
+      nextSelection.groomingPreference = '';
+    }
+    nextSelection.alaCarteServices = nextSelection.alaCarteServices.filter(id => ALA_CARTE_MAP.has(id));
+  }
 
   if (!nextSelection.servicePackage || nextSelection.alaCarteServices.length === 0) {
     return nextSelection;

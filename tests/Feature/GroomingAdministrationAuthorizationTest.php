@@ -3578,6 +3578,47 @@ class GroomingAdministrationAuthorizationTest extends TestCase
         return $cases;
     }
 
+    public function test_managed_services_work_through_customer_and_walkin_submission_without_changing_existing_prices(): void
+    {
+        (require base_path('database/migrations/2026_10_17_000001_add_grooming_catalog_management.php'))->up();
+        $this->authenticateAs('admin');
+        $extra = $this->postJson('/api/admin/grooming/services', ['name' => 'Paw Balm Care', 'kind' => 'ala_carte',
+            'pricing_type' => 'fixed', 'amount' => '180', 'isActive' => true, 'displayOrder' => 9])->assertCreated()->json('data');
+        $payload = ['name' => 'Coat Care Grooming', 'kind' => 'package', 'petType' => 'dog',
+            'descriptionItems' => ['Gentle bath and coat conditioning'], 'includedServiceIds' => [],
+            'isActive' => true, 'displayOrder' => 3, 'sizes' => []];
+        foreach (['small' => 600, 'medium' => 700, 'large' => 900, 'extra_large' => 1100] as $size => $amount) {
+            $payload['sizes'][$size] = ['pricing_type' => 'fixed', 'amount' => (string) $amount];
+        }
+        $package = $this->postJson('/api/admin/grooming/services', $payload)->assertCreated()->json('data');
+        DB::table('time_windows')->insert(['window_id' => 1, 'window_label' => '11:00 AM - 12:00 PM',
+            'start_time' => '11:00:00', 'end_time' => '12:00:00', 'max_slots' => 4, 'is_active' => true]);
+        $this->authenticateAs('customer');
+        $customer = $this->submitSignedGrooming('/api/booking/store', [
+            'booking_date' => now()->toDateString(), 'window_id' => 1, 'number_of_pets' => 1,
+            'pets' => [['pet_name' => 'Milo', 'species' => 'dog', 'weight' => 8, 'groomer_id' => 1,
+                'services' => ['package' => $package['id'], 'ala_carte' => [$extra['id']]]]],
+        ])->assertCreated()->assertJsonPath('booking.pets.0.grooming_estimate.minMinutes', 75);
+        $this->authenticateAs('admin');
+        $payload['name'] = 'Coat and Skin Care';
+        $payload['sizes']['small']['amount'] = '650';
+        $this->putJson('/api/admin/grooming/services/'.$package['serviceId'], $payload)->assertOk();
+        $this->authenticateAs('staff');
+        $walkin = $this->submitSignedGrooming('/api/admin/walk-in', [
+            'fname' => 'Maria', 'lname' => 'Santos', 'phone' => '09171234567',
+            'pets' => [['pet_name' => 'Coco', 'species' => 'dog', 'weight' => 8, 'groomer_id' => 1,
+                'services' => [['service_slug' => $package['id'], 'price' => 1], ['service_slug' => $extra['id'], 'price' => 1]]]],
+        ])->assertCreated();
+        foreach ([[$customer->json('booking.booking_id'), 600], [$walkin->json('booking_id'), 650]] as [$bookingId, $amount]) {
+            $this->assertDatabaseHas('booking_services', ['booking_id' => $bookingId, 'service_id' => $package['serviceId'], 'price_at_booking' => $amount]);
+            $this->assertDatabaseHas('booking_services', ['booking_id' => $bookingId, 'service_id' => $extra['serviceId'], 'price_at_booking' => 180]);
+            $this->assertDatabaseHas('booking_pets', ['booking_id' => $bookingId, 'grooming_estimate_min' => 75]);
+        }
+        $this->authenticateAs('admin');
+        $this->patchJson('/api/admin/grooming/services/'.$package['serviceId'].'/status', ['isActive' => false])->assertOk();
+        $this->assertDatabaseHas('booking_services', ['booking_id' => $customer->json('booking.booking_id'), 'service_id' => $package['serviceId'], 'price_at_booking' => 600]);
+    }
+
     private function authenticateAs(string $role): void
     {
         $user = new User;

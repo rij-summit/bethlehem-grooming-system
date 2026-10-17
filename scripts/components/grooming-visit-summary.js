@@ -1,6 +1,6 @@
 import { escapeHtml } from "../services/booking-draft-service.js";
 import { formatBookingDate, formatBookingTimeRange } from "../services/booking-format-service.js";
-import { getGroomingPricePresentation } from "../services/grooming-service.js";
+import { getGroomingPricePresentation } from "../services/grooming-service.js?v=managed-services-20261017-2";
 import {
   confirmationDocument, confirmationFields, confirmationSection,
   formatConfirmationLabel, formatConfirmationTimestamp, printConfirmation,

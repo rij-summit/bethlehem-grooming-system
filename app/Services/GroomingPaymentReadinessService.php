@@ -73,7 +73,7 @@ class GroomingPaymentReadinessService
                         'line_type' => $isAddon ? 'add_on' : 'service',
                         'service_kind' => $isAddon
                             ? 'ala_carte'
-                            : (config('grooming_services.services.'.($line->service?->slug ?? '').'.kind')
+                            : ($line->service?->kind
                                 === 'package' ? 'package' : 'ala_carte'),
                         'service_id' => $line->service_id !== null ? (int) $line->service_id : null,
                         'addon_id' => $line->addon_id !== null ? (int) $line->addon_id : null,

@@ -1,0 +1,85 @@
+<div class="grooming-pricing services-grooming">
+  <p x-show="loading" class="py-6 text-sm text-slate-500" role="status">Loading Grooming Services…</p>
+  <div x-show="error" class="py-4 text-sm text-red-600" role="alert"><span x-text="error"></span> <button type="button" @click="load()" class="font-semibold underline">Retry</button></div>
+  <template x-for="group in groups" :key="group.kind">
+    <section x-show="!loading && !error" class="services-group" :aria-labelledby="'heading-' + group.kind">
+      <header class="services-group-header">
+        <h2 :id="'heading-' + group.kind" class="text-xl font-bold text-[#1f3850]" x-text="group.label"></h2>
+        <button type="button" @click="openEditor(group.kind)" class="grooming-pricing-button grooming-pricing-button--primary" x-text="group.action"></button>
+      </header>
+      <div class="grooming-pricing-table-wrap" tabindex="0" role="region" :aria-label="group.label">
+        <table class="grooming-pricing-table services-table" :class="{'services-table--ala': group.kind === 'ala_carte'}">
+          <thead><tr><th scope="col">Service</th><th scope="col" x-text="group.kind === 'package' ? 'Pricing' : 'Price'"></th><th scope="col">Status</th><th scope="col" class="text-right">Actions</th></tr></thead>
+          <tbody>
+            <template x-for="service in services(group.kind)" :key="service.serviceId">
+              <tr>
+                <th scope="row"><span class="font-semibold text-[#2f4b66]" x-text="service.name"></span><span x-show="group.kind === 'package'" class="mt-1 block text-xs font-normal text-slate-500" x-text="({dog: 'Dogs', cat: 'Cats', all: 'Dogs & Cats'})[service.petType]"></span></th>
+                <td><div :class="group.kind === 'package' ? 'services-size-prices' : ''"><template x-for="option in service.priceOptions" :key="option.sizeKey"><span><span x-show="group.kind === 'package'" class="block text-xs text-slate-500" x-text="option.label"></span><span class="whitespace-nowrap font-medium" x-text="pricing(option)"></span></span></template></div></td>
+                <td><span class="rounded-full px-2.5 py-1 text-xs font-semibold" :class="service.isActive ? 'bg-emerald-50 text-emerald-700' : 'bg-slate-100 text-slate-500'" x-text="service.isActive ? 'Active' : 'Inactive'"></span></td>
+                <td><div class="flex justify-end gap-2"><button type="button" @click="openEditor(group.kind, service)" :disabled="busyId !== null" :aria-label="'Edit ' + service.name" class="grooming-pricing-button">Edit</button><button type="button" @click="changeStatus(service)" :disabled="busyId !== null" :aria-label="(service.isActive ? 'Deactivate ' : 'Activate ') + service.name" class="grooming-pricing-button" x-text="busyId === service.serviceId ? 'Updating…' : service.isActive ? 'Deactivate' : 'Activate'"></button></div></td>
+              </tr>
+            </template>
+            <tr x-show="!services(group.kind).length"><td colspan="4" class="py-8 text-center text-slate-500" x-text="group.kind === 'package' ? 'No grooming packages yet.' : 'No Ala carte services yet.'"></td></tr>
+          </tbody>
+        </table>
+      </div>
+    </section>
+  </template>
+
+  <dialog x-ref="editor" class="services-editor grooming-pricing-dialog" aria-labelledby="grooming-editor-title" @cancel.prevent="closeEditor()" @click="if ($event.target === $el) closeEditor()">
+    <template x-if="form">
+      <form x-ref="form" @submit.prevent="save()">
+        <header class="grooming-pricing-modal-header">
+          <h2 id="grooming-editor-title" x-text="(editingId ? 'Edit ' : 'Add ') + (form.kind === 'package' ? 'Grooming Package' : 'Ala carte Service')"></h2>
+          <button type="button" @click="closeEditor()" :disabled="saving" class="grooming-pricing-close" aria-label="Close service editor">×</button>
+        </header>
+        <div class="grooming-pricing-modal-body">
+          <fieldset :disabled="saving" class="services-form">
+            <label class="services-field"><span>Service name</span><input x-ref="serviceName" x-model="form.name" type="text" maxlength="100" required class="grooming-pricing-control" /></label>
+            <template x-if="form.kind === 'package'">
+              <div class="services-form">
+                <label class="services-field"><span>Pet type</span><select x-model="form.petType" class="grooming-pricing-control"><option value="dog">Dogs</option><option value="cat">Cats</option><option value="all">Dogs &amp; Cats</option></select></label>
+                <fieldset class="min-w-0"><legend class="services-label">Description items</legend>
+                  <div class="services-description-list">
+                    <template x-for="(item, index) in form.descriptionItems" :key="item.key">
+                      <div data-description-row class="services-description-row">
+                        <input type="text" x-model="item.text" :aria-label="'Description item ' + (index + 1)" maxlength="300" required class="grooming-pricing-control" />
+                        <button type="button" @click="removeDescription(index)" :disabled="form.descriptionItems.length === 1" :aria-label="'Remove description item ' + (index + 1)" class="grooming-pricing-button services-remove">×</button>
+                      </div>
+                    </template>
+                  </div>
+                  <button type="button" @click="addDescription()" :disabled="form.descriptionItems.length >= 20" class="grooming-pricing-button mt-2">Add description item</button>
+                </fieldset>
+              </div>
+            </template>
+            <fieldset class="min-w-0"><legend class="services-label" x-text="form.kind === 'package' ? 'Size pricing' : 'Price'"></legend>
+              <button x-show="form.defaultPrices.length" type="button" @click="restorePrices()" class="grooming-pricing-button mb-3">Restore default prices</button>
+              <div class="services-price-rows">
+                <template x-for="row in form.priceRows" :key="row.sizeKey || 'standard'">
+                  <div class="services-price-row" :class="{'services-price-row--single': form.kind === 'ala_carte'}">
+                    <label x-show="form.kind === 'package'" class="flex items-center gap-2 font-semibold text-[#2f4b66]"><input type="checkbox" x-model="row.enabled" class="h-4 w-4 accent-[#315b7e]" /><span x-text="row.label"></span></label>
+                    <label class="services-field"><span>Pricing type<span class="sr-only" x-text="' for ' + row.label"></span></span><select x-model="row.pricingType" :disabled="!row.enabled" class="grooming-pricing-control"><option value="fixed">Fixed</option><option value="starting_at">Starting at (+)</option><option value="range">Range</option></select></label>
+                    <label class="services-field"><span x-text="row.pricingType === 'range' ? 'Minimum (₱)' : 'Amount (₱)'"></span><input type="text" inputmode="decimal" x-model="row.amount" :aria-label="row.label + ' amount'" :disabled="!row.enabled" :required="row.enabled" class="grooming-pricing-control" /></label>
+                    <label x-show="row.pricingType === 'range'" class="services-field"><span>Maximum (₱)</span><input type="text" inputmode="decimal" x-model="row.maximum" :aria-label="row.label + ' maximum'" :disabled="!row.enabled || row.pricingType !== 'range'" :required="row.enabled && row.pricingType === 'range'" class="grooming-pricing-control" /></label>
+                  </div>
+                </template>
+              </div>
+            </fieldset>
+            <template x-if="form.kind === 'package'">
+              <fieldset class="min-w-0"><legend class="services-label">Included Ala carte services</legend>
+                <div class="services-inclusions"><template x-for="service in services('ala_carte')" :key="service.serviceId"><label class="flex items-center gap-2 text-sm text-slate-700"><input type="checkbox" :value="service.serviceId" x-model.number="form.includedServiceIds" class="h-4 w-4 shrink-0 accent-[#315b7e]" /><span x-text="service.name + (service.isActive ? '' : ' (Inactive)')"></span></label></template></div>
+                <p x-show="!services('ala_carte').length" class="text-sm text-slate-500">No Ala carte services yet.</p>
+              </fieldset>
+            </template>
+            <div class="services-form-columns">
+              <label class="services-field"><span>Status</span><select x-model.boolean="form.isActive" class="grooming-pricing-control"><option value="true">Active</option><option value="false">Inactive</option></select></label>
+              <label class="services-field"><span>Display order</span><input type="number" min="0" max="10000" step="1" required x-model.number="form.displayOrder" class="grooming-pricing-control" /></label>
+            </div>
+            <p x-ref="formError" x-show="formError" x-text="formError" tabindex="-1" class="text-sm text-red-600" role="alert"></p>
+          </fieldset>
+        </div>
+        <footer class="grooming-pricing-modal-footer"><button type="button" @click="closeEditor()" :disabled="saving" class="grooming-pricing-button">Cancel</button><button type="submit" :disabled="saving" class="grooming-pricing-button grooming-pricing-button--primary" x-text="saving ? 'Saving…' : editingId ? 'Save changes' : 'Add service'"></button></footer>
+      </form>
+    </template>
+  </dialog>
+</div>

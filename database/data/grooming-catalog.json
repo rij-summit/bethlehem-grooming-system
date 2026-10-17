@@ -1,0 +1,131 @@
+[
+  {
+    "id": "partial_grooming",
+    "kind": "package",
+    "petType": "dog",
+    "name": "Partial Grooming",
+    "descriptionItems": [
+      "Trimming, Nail Clipping and Ear Cleaning",
+      "Cologne Spritz and Dry Shampoo"
+    ],
+    "includedAlaCarteServiceIds": [
+      "nail_clipping",
+      "ear_cleaning"
+    ]
+  },
+  {
+    "id": "regular_dog_grooming",
+    "kind": "package",
+    "petType": "dog",
+    "name": "Regular Dog Grooming",
+    "descriptionItems": [
+      "Bathing with Shampoo and Blow Drying",
+      "Summer-cut, Semi-Kalbo, Kalbo or Haircut",
+      "Spot, Sanitary area trim, paw pads, face, belly, or rear",
+      "Nail Clipping, Ear Cleaning and Tooth-brushing"
+    ],
+    "includedAlaCarteServiceIds": [
+      "nail_clipping",
+      "ear_cleaning",
+      "tooth_brushing"
+    ]
+  },
+  {
+    "id": "deluxe_dog_grooming",
+    "kind": "package",
+    "petType": "dog",
+    "name": "Deluxe Dog Grooming",
+    "descriptionItems": [
+      "Bathing with Shampoo and Blow Drying",
+      "Special haircut (Puppy Cut or Hairstyle of choice)",
+      "Nail Clipping, Ear Cleaning and Tooth-brushing",
+      "Cologne Spritzes"
+    ],
+    "includedAlaCarteServiceIds": [
+      "nail_clipping",
+      "ear_cleaning",
+      "tooth_brushing"
+    ]
+  },
+  {
+    "id": "bath_and_go",
+    "kind": "package",
+    "petType": "dog",
+    "name": "Bath and Go!",
+    "descriptionItems": [
+      "Bathing with Shampoo and Blow Drying",
+      "Nail Clipping, Ear Cleaning and Tooth-brushing"
+    ],
+    "includedAlaCarteServiceIds": [
+      "nail_clipping",
+      "ear_cleaning",
+      "tooth_brushing"
+    ]
+  },
+  {
+    "id": "cat_full_grooming",
+    "kind": "package",
+    "petType": "cat",
+    "name": "Full Grooming",
+    "descriptionItems": [
+      "Bathing with Shampoo and Blow Drying",
+      "Haircut (If requested)",
+      "Nail Clipping",
+      "Ear Cleaning"
+    ],
+    "includedAlaCarteServiceIds": [
+      "nail_clipping",
+      "ear_cleaning"
+    ]
+  },
+  {
+    "id": "nail_clipping",
+    "kind": "ala_carte",
+    "petTypes": [
+      "cat",
+      "dog"
+    ],
+    "name": "Nail Clipping",
+    "descriptionItems": []
+  },
+  {
+    "id": "ear_cleaning",
+    "kind": "ala_carte",
+    "petTypes": [
+      "cat",
+      "dog"
+    ],
+    "name": "Ear Cleaning",
+    "descriptionItems": []
+  },
+  {
+    "id": "facial_trimming",
+    "kind": "ala_carte",
+    "petTypes": [
+      "cat",
+      "dog"
+    ],
+    "name": "Facial Trimming",
+    "descriptionItems": []
+  },
+  {
+    "id": "anal_sac_draining",
+    "kind": "ala_carte",
+    "petTypes": [
+      "cat",
+      "dog"
+    ],
+    "name": "Anal Sac Draining",
+    "descriptionItems": []
+  },
+  {
+    "id": "tooth_brushing",
+    "kind": "ala_carte",
+    "petTypes": [
+      "cat",
+      "dog"
+    ],
+    "name": "Tooth Brushing",
+    "descriptionItems": []
+  }
+]

@@ -1,4 +1,4 @@
-import { renderEstimateReview } from "./grooming-estimate-selection.js";
+import { renderEstimateReview } from "./grooming-estimate-selection.js?catalog=services-20261017-2";
 import { petGroomerLabel } from "./pet-groomer-selection.js";
 import {
   escapeHtml,
@@ -12,7 +12,7 @@ import {
   getGroomingPricePresentation,
   formatPriceOption,
   getPackageById,
-} from "../services/grooming-service.js?v=grooming-pricing-20261006&flow=grooming-order-20261016&groomers=named-20261016";
+} from "../services/grooming-service.js?v=managed-services-20261017-2";
 import { buildWalkInPets, renderWalkInConsentStep } from "./walk-in-consent-step.js?capacity=20261010&pet-weight=pet-weight-size-20261011-v3&groomers=named-20261016&consent=20261017";
 
 const state = {

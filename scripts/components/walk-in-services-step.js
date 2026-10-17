@@ -1,4 +1,4 @@
-import { renderEstimateSelection, updateEstimateSelection, renderSelectionsPreservingFocus } from "./grooming-estimate-selection.js";
+import { renderEstimateSelection, updateEstimateSelection, renderSelectionsPreservingFocus } from "./grooming-estimate-selection.js?catalog=services-20261017-2";
 import { loadPetGroomers, normalizePetGroomerSelections, hasPetGroomerSelection, renderPetGroomerSelection } from "./pet-groomer-selection.js";
 import {
   escapeHtml,
@@ -9,6 +9,7 @@ import {
   hasRequiredGroomingPreference,
   estimatePetGrooming,
   loadGroomingCatalogue,
+  normalizeStepThreeDraft,
   calculatePetSelectionPricing,
   getGroomingPricePresentation,
   createEmptyPetServiceSelection,
@@ -18,8 +19,8 @@ import {
   getPackageById,
   getPackageAlaCarteRules,
   getPackagesByPetType,
-} from "../services/grooming-service.js?v=grooming-pricing-20261006&flow=grooming-order-20261016&groomers=named-20261016";
-import { renderWalkInReviewStep } from "./walk-in-review-step.js?v=grooming-pricing-20261006&capacity=20261010&pet-weight=pet-weight-size-20261011-v3&groomers=named-20261016&consent=20261017";
+} from "../services/grooming-service.js?v=managed-services-20261017-2";
+import { renderWalkInReviewStep } from "./walk-in-review-step.js?v=grooming-pricing-20261006&capacity=20261010&pet-weight=pet-weight-size-20261011-v3&groomers=named-20261016&consent=20261017&catalog=services-20261017-2";
 
 const state = {
   pets: [],
@@ -147,6 +148,7 @@ async function loadServicePricing() {
   elements.petServiceSelections.innerHTML = '<p class="py-6 text-sm text-slate-500" role="status">Loading grooming pricing...</p>';
   try {
     await Promise.all([loadGroomingCatalogue(), loadPetGroomers()]);
+    state.petSelections = normalizeStepThreeDraft({petSelections: state.petSelections}, {pets: state.pets});
     normalizePetGroomerSelections(state.petSelections);
     state.catalogueReady = true;
     renderPetServiceSelections();

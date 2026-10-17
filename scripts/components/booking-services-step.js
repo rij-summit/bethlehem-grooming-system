@@ -1,4 +1,4 @@
-import { renderEstimateSelection, updateEstimateSelection, renderSelectionsPreservingFocus } from "./grooming-estimate-selection.js";
+import { renderEstimateSelection, updateEstimateSelection, renderSelectionsPreservingFocus } from "./grooming-estimate-selection.js?catalog=services-20261017-2";
 import { loadPetGroomers, normalizePetGroomerSelections, hasPetGroomerSelection, renderPetGroomerSelection } from "./pet-groomer-selection.js";
 import {
   BOOKING_STEP_THREE_KEY,
@@ -26,7 +26,7 @@ import {
   getPackageAlaCarteRules,
   getPackagesByPetType,
   normalizeStepThreeDraft,
-} from "../services/grooming-service.js?v=grooming-pricing-20261006&flow=grooming-order-20261016&groomers=named-20261016";
+} from "../services/grooming-service.js?v=managed-services-20261017-2";
 
 /**
  * Booking Services Step Controller
@@ -93,6 +93,7 @@ async function loadServicePricing() {
   elements.petServiceSelections.innerHTML = '<p class="py-6 text-sm text-slate-500" role="status">Loading grooming pricing...</p>';
   try {
     await Promise.all([loadGroomingCatalogue(), loadPetGroomers()]);
+    state.petSelections = normalizeStepThreeDraft({petSelections: state.petSelections}, state.bookingDraft);
     normalizePetGroomerSelections(state.petSelections);
     state.catalogueReady = true;
     renderPetServiceSelections();

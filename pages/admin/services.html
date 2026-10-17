@@ -1,0 +1,176 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <link rel="icon" type="image/png" href="../../assets/images/clinic/Bethlehem_Logo-256.png" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Services | Bethlehem Animal Clinic</title>
+    <link rel="stylesheet" href="../../css/output.css?v=clinic-merge-20261007&clinic-products=20261010&treatments=20261012&medical-record=20261012&clinic-services=20261014-provided&case-flow=20261014-payment-filters&unified-cases=20261014&patient-profile=20261017-treatment-types&patient-flow=20261014-case-details-v3&clinic-payment=20261015-v2" />
+    <link rel="stylesheet" href="../../css/custom.css?v=unified-inventory-20261001b&release=20261001" />
+    <link rel="stylesheet" href="../../css/components/admin-services.css?v=20261017-2" />
+    <link rel="stylesheet" href="../../css/components/toast.css?v=semantic-toast-20261015" />
+  </head>
+  <body class="bg-[#f5f8fb] text-slate-800">
+    <div x-data="adminSidebar()" x-cloak class="min-h-screen flex bg-[#f5f8fb]">
+
+      <!-- Mobile Backdrop -->
+      <div x-cloak x-show="sidebarOpen" x-transition.opacity
+        class="fixed inset-0 z-40 bg-slate-900/40 lg:hidden"
+        @click="sidebarOpen = false"></div>
+
+      <!-- Sidebar -->
+      <aside
+        class="admin-sidebar-menu fixed inset-y-0 left-0 z-50 flex w-[280px] flex-col border-r border-[#d7e3ef] bg-[#a9bfd6] shadow-xl transition-transform duration-300 lg:translate-x-0"
+        :class="sidebarOpen ? 'translate-x-0' : '-translate-x-full lg:translate-x-0'"
+      >
+        <div class="px-6 py-6">
+          <div class="flex items-start gap-4">
+            <div class="flex h-14 w-14 items-center justify-center rounded-2xl bg-white p-1.5 shadow-sm">
+              <img src="../../assets/images/clinic/Bethlehem_Logo.png" alt="Bethlehem Animal Clinic logo" class="h-full w-full object-contain" />
+            </div>
+            <div class="min-w-0">
+              <h1 class="text-xl font-extrabold leading-tight text-[#1f3850]">Bethlehem Animal</h1>
+              <p class="text-sm font-medium text-[#355674]">Clinic &amp; Grooming</p>
+            </div>
+          </div>
+        </div>
+
+        <nav class="px-4 py-6">
+          <div class="mb-8">
+            <p class="mb-3 px-3 text-xs font-bold uppercase tracking-[0.18em] text-[#5c7690]">Main</p>
+            <div class="space-y-1.5">
+              <a href="./dashboard.html" class="flex items-center gap-3 rounded-2xl px-4 py-3 font-semibold transition hover:bg-white/40" :class="activePage === 'dashboard' ? 'bg-[#315b7e] text-white shadow-sm' : 'text-[#2f4b66]'">
+                <i data-lucide="layout-dashboard" class="h-5 w-5"></i><span>Dashboard</span>
+              </a>
+              <a href="./clients.html" class="flex items-center gap-3 rounded-2xl px-4 py-3 font-semibold transition hover:bg-white/40" :class="activePage === 'customers' ? 'bg-[#315b7e] text-white shadow-sm' : 'text-[#2f4b66]'">
+                <i data-lucide="users" class="h-5 w-5"></i><span>Customers</span>
+              </a>
+              <a href="./appointments.html" class="flex items-center gap-3 rounded-2xl px-4 py-3 font-semibold transition hover:bg-white/40" :class="activePage === 'appointments' ? 'bg-[#315b7e] text-white shadow-sm' : 'text-[#2f4b66]'">
+                <i data-lucide="calendar-days" class="h-5 w-5"></i><span>Grooming</span>
+                <span x-show="hasIncomingAppointments" style="display: none" class="ml-auto h-2.5 w-2.5 rounded-full bg-red-500" aria-label="Active grooming customers today"></span>
+              </a>
+              <a href="./clinic.html" class="flex items-center gap-3 rounded-2xl px-4 py-3 font-semibold transition hover:bg-white/40" :class="activePage === 'clinic' ? 'bg-[#315b7e] text-white shadow-sm' : 'text-[#2f4b66]'">
+                <i data-lucide="stethoscope" class="h-5 w-5"></i><span>Clinic</span>
+              </a>
+              <a href="./inventory/inventory.html" class="flex items-center gap-3 rounded-2xl px-4 py-3 font-semibold transition hover:bg-white/40" :class="activePage === 'inventory' ? 'bg-[#315b7e] text-white shadow-sm' : 'text-[#2f4b66]'">
+                <i data-lucide="box" class="h-5 w-5"></i><span>Inventory</span>
+              </a>
+            </div>
+          </div>
+
+          <div class="mb-8">
+            <p class="mb-3 px-3 text-xs font-bold uppercase tracking-[0.18em] text-[#5c7690]">Records</p>
+            <div class="space-y-1.5">
+              <a href="./archive.html" class="flex items-center gap-3 rounded-2xl px-4 py-3 font-semibold transition hover:bg-white/40" :class="activePage === 'archive' ? 'bg-[#315b7e] text-white shadow-sm' : 'text-[#2f4b66]'">
+                <i data-lucide="archive" class="h-5 w-5"></i><span>Archive</span>
+              </a>
+              <a href="./transactions.html" class="flex items-center gap-3 rounded-2xl px-4 py-3 font-semibold transition hover:bg-white/40" :class="activePage === 'transactions' ? 'bg-[#315b7e] text-white shadow-sm' : 'text-[#2f4b66]'">
+                <i data-lucide="receipt" class="h-5 w-5"></i><span>Transactions</span>
+              </a>
+              <a href="./reports.html" x-show="isAdmin" style="display:none" class="flex items-center gap-3 rounded-2xl px-4 py-3 font-semibold transition hover:bg-white/40" :class="activePage === 'reports' ? 'bg-[#315b7e] text-white shadow-sm' : 'text-[#2f4b66]'">
+                <i data-lucide="clipboard-list" class="h-5 w-5"></i><span>Reports</span>
+              </a>
+            </div>
+          </div>
+
+          <div x-show="isAdmin">
+            <p class="mb-3 px-3 text-xs font-bold uppercase tracking-[0.18em] text-[#5c7690]">System</p>
+            <div class="space-y-1.5">
+              <a href="./settings.html" class="flex items-center gap-3 rounded-2xl px-4 py-3 font-semibold transition hover:bg-white/40" :class="activePage === 'settings' ? 'bg-[#315b7e] text-white shadow-sm' : 'text-[#2f4b66]'">
+                <i data-lucide="settings" class="h-5 w-5"></i><span>Settings</span>
+              </a>
+            </div>
+          </div>
+        </nav>
+
+        <div class="admin-sidebar-footer p-4">
+          <div class="mb-4 flex items-center gap-3 rounded-2xl bg-[#355c84] p-3">
+            <div class="flex h-12 w-12 items-center justify-center rounded-full bg-white/20 text-sm font-extrabold text-white" x-text="isAdmin ? 'AD' : 'ST'">AD</div>
+            <div class="min-w-0">
+              <p class="truncate font-bold text-white" x-text="isAdmin ? 'Admin' : 'Staff'">Admin</p>
+              <p class="truncate text-sm text-white/80" x-text="isAdmin ? 'Clinic Manager' : staffRoleLabel">Clinic Manager</p>
+            </div>
+          </div>
+          <button type="button" class="flex w-full items-center justify-center gap-2 rounded-2xl border border-[#6e8ba8] px-4 py-3 font-bold text-[#1f3850] transition hover:bg-white/30" @click="handleLogout()">
+            <i data-lucide="log-out" class="h-4 w-4"></i><span>Logout</span>
+          </button>
+        </div>
+      </aside>
+
+      <main class="services-page min-w-0 flex-1 px-4 pb-6 lg:ml-[280px] lg:px-6" x-data="adminServices()">
+        <header class="flex h-14 items-center justify-between lg:hidden">
+          <h1 class="font-bold text-[#1f3850]">Services</h1>
+          <button type="button" aria-label="Open navigation" class="rounded-xl border border-[#cfe0ee] bg-white p-2 text-[#315b7e]" @click="sidebarOpen = !sidebarOpen"><i data-lucide="menu" class="h-5 w-5"></i></button>
+        </header>
+        <header class="mt-3 rounded-[28px] border border-[#cfe0ee] bg-[#a9bfd6] px-4 py-5 lg:mt-6 lg:px-6 lg:py-6">
+          <h1 class="text-3xl font-extrabold text-[#1f3850] lg:text-4xl">Services</h1>
+        </header>
+        <div x-ref="tabs" class="services-tabs mt-5" role="tablist" aria-label="Service type" @keydown="tabKeydown($event)">
+          <button id="grooming-tab" type="button" role="tab" x-show="isAdmin" :aria-selected="activeTab === 'grooming'" :tabindex="activeTab === 'grooming' ? 0 : -1" aria-controls="grooming-panel" @click="selectTab('grooming')">Grooming</button>
+          <button id="clinic-tab" type="button" role="tab" x-show="canViewClinic" :aria-selected="activeTab === 'clinic'" :tabindex="activeTab === 'clinic' ? 0 : -1" aria-controls="clinic-panel" @click="selectTab('clinic')">Clinic</button>
+        </div>
+        <p x-show="loading" class="py-6 text-sm text-slate-500" role="status">Loading Services…</p>
+        <div x-show="error" x-cloak class="py-6 text-sm text-red-600" role="alert"><span x-text="error"></span> <button type="button" @click="showTab()" class="font-semibold underline">Retry</button></div>
+        <div id="grooming-panel" x-ref="grooming" role="tabpanel" aria-labelledby="grooming-tab" x-show="activeTab === 'grooming' && !error" class="mt-6 min-w-0"></div>
+        <div id="clinic-panel" x-ref="clinic" role="tabpanel" aria-labelledby="clinic-tab" x-show="activeTab === 'clinic' && !error" class="services-clinic mt-6 min-w-0" data-money-input-root></div>
+      </main>
+    </div>
+
+    <!-- Shared clinic confirm dialog and toast (replaces browser alert/confirm) -->
+    <div x-data>
+      <div x-cloak x-show="$store.clinicFeedback.dialog.open" style="display:none" x-transition
+        class="fixed inset-0 z-[250] flex items-center justify-center bg-slate-900/75 px-4"
+        @keydown.escape.window="if ($store.clinicFeedback.dialog.open && $store.clinicFeedback.dialog.dismissOnEscape) $store.clinicFeedback.answer(false)">
+        <div class="w-full max-w-md overflow-hidden rounded-3xl bg-white shadow-2xl" role="alertdialog" aria-modal="true" aria-labelledby="clinic-confirm-title" aria-describedby="clinic-confirm-message">
+          <div class="px-6 py-5">
+            <div class="flex h-12 w-12 items-center justify-center rounded-2xl"
+              :class="$store.clinicFeedback.dialog.danger ? 'bg-red-50 text-red-600' : 'bg-[#eef5fb] text-[#315b7e]'">
+              <span x-show="$store.clinicFeedback.dialog.danger"><i data-lucide="circle-alert" class="h-6 w-6"></i></span>
+              <span x-show="!$store.clinicFeedback.dialog.danger"><i data-lucide="info" class="h-6 w-6"></i></span>
+            </div>
+            <h3 id="clinic-confirm-title" class="mt-4 text-lg font-bold text-slate-800" x-text="$store.clinicFeedback.dialog.title"></h3>
+            <p id="clinic-confirm-message" class="mt-2 whitespace-pre-line text-sm leading-6 text-slate-600" x-text="$store.clinicFeedback.dialog.message"></p>
+          </div>
+          <div class="flex flex-col-reverse gap-3 border-t border-slate-200 bg-slate-50 px-6 py-4 sm:flex-row sm:justify-end">
+            <button type="button" @click="$store.clinicFeedback.answer(false)" class="rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-sm font-semibold text-slate-600 hover:bg-slate-50" x-text="$store.clinicFeedback.dialog.cancelLabel"></button>
+            <button type="button" @click="$store.clinicFeedback.answer(true)" x-effect="if ($store.clinicFeedback.dialog.open) $nextTick(() => $el.focus())"
+              class="rounded-xl px-4 py-2.5 text-sm font-semibold text-white"
+              :class="$store.clinicFeedback.dialog.danger ? 'bg-red-600 hover:bg-red-700' : 'bg-[#315b7e] hover:bg-[#274864]'"
+              x-text="$store.clinicFeedback.dialog.confirmLabel"></button>
+          </div>
+        </div>
+      </div>
+
+      <div class="app-toast" style="--app-toast-z-index: 270"
+        :class="{ ['app-toast--' + $store.clinicFeedback.toast.variant]: true, 'is-visible': $store.clinicFeedback.toast.show }"
+        role="status" aria-live="polite" aria-atomic="true">
+        <span class="app-toast__icon" aria-hidden="true">
+          <i x-show="$store.clinicFeedback.toast.variant === 'success'" data-lucide="check"></i>
+          <i x-show="$store.clinicFeedback.toast.variant === 'error'" data-lucide="circle-alert"></i>
+          <i x-show="$store.clinicFeedback.toast.variant === 'warning'" data-lucide="triangle-alert"></i>
+          <i x-show="$store.clinicFeedback.toast.variant === 'info'" data-lucide="info"></i>
+        </span>
+        <span class="app-toast__message" x-text="$store.clinicFeedback.toast.message"></span>
+        <div class="app-toast__progress" aria-hidden="true">
+          <div class="app-toast__progress-fill"
+            x-effect="$el.style.transitionDuration = '0ms'; $el.style.width = '100%';
+              if ($store.clinicFeedback.toast.show) {
+                void $el.offsetWidth;
+                $el.style.transitionDuration = $store.clinicFeedback.toastDuration + 'ms';
+                $el.style.width = '0%';
+              }"></div>
+        </div>
+      </div>
+    </div>
+
+    <script src="https://unpkg.com/lucide@latest"></script>
+    <script src="../../scripts/api.js?v=services-20261017"></script>
+    <script src="../../scripts/components/admin-sidebar.js?v=services-20261017&services=20261017"></script>
+    <script src="../../scripts/components/clinic-feedback.js?v=services-20261017"></script>
+    <script src="../../scripts/components/admin-clinic-services.js?v=20261015-confinement-weight-v2"></script>
+    <script src="../../scripts/components/inventory-money-input.js?v=20261013-clinic-services"></script>
+    <script src="../../scripts/components/admin-grooming-services.js?v=services-20261017-2"></script>
+    <script src="../../scripts/components/admin-services.js?v=services-20261017-2"></script>
+    <script src="https://unpkg.com/alpinejs@3.x.x/dist/cdn.min.js" defer></script>
+  </body>
+</html>

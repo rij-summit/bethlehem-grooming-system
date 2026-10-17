@@ -1,0 +1,39 @@
+.services-tabs { display: flex; gap: 8px; padding: 6px; width: fit-content; max-width: 100%; border: 1px solid #cfe0ee; border-radius: 16px; background: #eef5fb; }
+.services-tabs button { min-height: 44px; padding: 10px 24px; border-radius: 12px; color: #2f4b66; font-weight: 600; white-space: nowrap; }
+.services-tabs button[aria-selected="true"] { background: #315b7e; color: white; box-shadow: 0 1px 2px #1f38501a; }
+.services-tabs button:hover:not([aria-selected="true"]) { background: white; }
+.services-group + .services-group { margin-top: 32px; }
+.services-group-header { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 16px; }
+.services-size-prices { display: grid; grid-template-columns: repeat(4, minmax(76px, 1fr)); gap: 12px; }
+.services-table { min-width: 940px; table-layout: auto; }
+.services-table--ala { min-width: 640px; }
+.services-table th[scope="row"] { max-width: 240px; overflow-wrap: anywhere; white-space: normal; background: white; border-top: 1px solid var(--pricing-border); font-size: 14px; font-weight: 600; }
+.services-table :is(th, td):last-child { width: auto; }
+.services-editor { width: min(760px, calc(100% - 32px)); max-width: none; max-height: calc(100dvh - 32px); padding: 0; border: 0; overflow-y: auto; }
+.services-editor::backdrop { background: rgb(15 23 42 / .65); }
+.services-editor .grooming-pricing-modal-header { position: sticky; top: 0; z-index: 1; background: white; }
+.services-editor .grooming-pricing-modal-footer { position: sticky; bottom: 0; background: #f8fafc; }
+.services-form { display: grid; gap: 20px; min-width: 0; }
+.services-field { display: grid; gap: 6px; min-width: 0; font-size: 14px; }
+.services-field > span, .services-label { font-size: 13px; font-weight: 600; color: #2f4b66; }
+.services-label { margin-bottom: 10px; }
+.services-description-list { display: grid; gap: 8px; }
+.services-description-row { display: grid; grid-template-columns: minmax(0, 1fr) 44px; gap: 8px; }
+.services-remove { font-size: 20px; padding: 4px; }
+.services-price-rows { display: grid; gap: 12px; }
+.services-price-row { display: grid; grid-template-columns: 110px minmax(0, 1fr) minmax(0, 1fr) minmax(0, 1fr); align-items: end; gap: 10px; }
+.services-price-row > label:first-child { align-self: center; font-size: 13px; }
+.services-price-row--single { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+.services-price-row--single > label:first-child { display: none; }
+.services-form-columns, .services-inclusions { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
+.services-inclusions label { min-height: 32px; }
+.services-page :is(button, input, select, [tabindex="0"]):focus-visible { outline: 2px solid #315b7e; outline-offset: 2px; }
+.services-page button:disabled { cursor: not-allowed; opacity: .5; }
+.services-clinic > section > div { padding: 0; }
+@media (max-width: 639px) {
+  .services-group-header { flex-direction: column; align-items: flex-start; }
+  .services-price-row, .services-price-row--single { grid-template-columns: repeat(2, minmax(0, 1fr)); padding-bottom: 12px; border-bottom: 1px solid #e2e8f0; }
+  .services-price-row > label:first-child { grid-column: 1 / -1; }
+  .services-inclusions { grid-template-columns: minmax(0, 1fr); }
+  .services-editor { width: calc(100% - 24px); max-height: calc(100dvh - 24px); }
+}

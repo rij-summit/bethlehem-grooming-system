@@ -48,6 +48,7 @@ class IndependentAuthenticationSessionsTest extends TestCase
             $table->json('range_price_maximums')->nullable();
             $table->boolean('is_active')->default(true);
         });
+        (require base_path('database/migrations/2026_10_17_000001_add_grooming_catalog_management.php'))->up();
         foreach (['admin', 'customer'] as $index => $role) {
             User::create([
                 'first_name' => $role, 'last_name' => 'Session', 'username' => $role,
@@ -125,7 +126,7 @@ class IndependentAuthenticationSessionsTest extends TestCase
         $admin = $this->login('admin');
         $customer = $this->login('customer');
         $service = Service::create([
-            'slug' => 'ear_cleaning', 'service_name' => 'Ear Cleaning',
+            'slug' => 'ear_cleaning', 'service_name' => 'Ear Cleaning', 'kind' => 'ala_carte', 'pet_type' => 'all',
             'base_price' => 150, 'price_min' => 150, 'is_starting_price' => true,
             'is_active' => true,
         ]);

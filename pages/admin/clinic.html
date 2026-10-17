@@ -126,7 +126,6 @@
 
         <div x-show="sectionLoading" role="status" class="p-6 text-sm text-slate-500">Loading Clinic section…</div>
         <div x-show="sectionError" x-cloak role="alert" class="m-4 rounded-xl bg-red-50 p-4 text-sm text-red-700"><span x-text="sectionError"></span><button type="button" @click="showSection()" class="ml-3 font-semibold underline">Try again</button></div>
-        <div x-ref="services" data-money-input-root class="min-w-0"></div>
         <div x-ref="cases">
         <section x-data="adminClinicCasesSection()" x-show="activeSection !== 'services'">
         <main class="min-w-0 flex-1 px-4 pb-6 lg:px-6">
@@ -1693,14 +1692,15 @@
     <script src="../../scripts/components/cash-payment.js?v=shared-cash-20261007"></script>
     <script src="../../scripts/components/payment-invoice.js?v=clinic-invoice-20261015"></script>
     <script src="../../scripts/api.js?v=session-inactivity-20260828&release=clinic-merge-20261007&auth=session-scope-20261006&clinic=billing-20261014-v1&clinic-products=20261010&medical-record=20261015-imaging-v2&patient-history=20261014-case-details&case-lifecycle=20261017"></script>
-    <script src="../../scripts/components/admin-sidebar.js?v=grooming-today-indicator-20261005&release=inventory-labels-20261007&clinic=sections-removed-20261010&clinic-services=20261013&case-flow=20261013-v5&unified-cases=20261014"></script>
+    <script src="../../scripts/components/admin-sidebar.js?v=grooming-today-indicator-20261005&release=inventory-labels-20261007&clinic=sections-removed-20261010&clinic-services=20261013&case-flow=20261013-v5&unified-cases=20261014&services=20261017"></script>
+    <script src="../../scripts/components/clinic-feedback.js?v=services-20261017"></script>
     <script src="../../scripts/components/clinic-attachments.js?v=20261015"></script>
-    <script src="../../scripts/components/admin-clinic.js?toast=semantic-20261015&attachments=shared-20261015&v=clinic-merge-20261007&roles=20261010-4&clinic-products=inventory-weight-catalog-20261011-v4&pet-weight=pet-weight-size-20261011-v3&treatments=20261012&medical-record=20261015-imaging-v2&clinic-services=20261013-confinement&case-flow=20261013-v5&unified-cases=20261014&patient-profile=20261017-treatment-types&patient-flow=20261015-number-labels-v4&clinic-payment=20261015-v2&chief-complaint=20261015&walk-in=entry-context-20261015&case-lifecycle=20261017"></script>
+    <script src="../../scripts/components/admin-clinic.js?services=20261017&toast=semantic-20261015&attachments=shared-20261015&v=clinic-merge-20261007&roles=20261010-4&clinic-products=inventory-weight-catalog-20261011-v4&pet-weight=pet-weight-size-20261011-v3&treatments=20261012&medical-record=20261015-imaging-v2&clinic-services=20261013-confinement&case-flow=20261013-v5&unified-cases=20261014&patient-profile=20261017-treatment-types&patient-flow=20261015-number-labels-v4&clinic-payment=20261015-v2&chief-complaint=20261015&walk-in=entry-context-20261015&case-lifecycle=20261017"></script>
     <script src="../../scripts/components/admin-clinic-case-workspace.js?v=20261015-imaging-v2&case-flow=20261013-v5"></script>
     <script src="../../scripts/components/admin-clinic-confinement.js?v=20261015-confinement-weight-v1"></script>
     <script src="../../scripts/components/admin-vaccinations.js?v=20261014-billing-v1&roles=20261010-4&clinic-products=20261010&treatments=working-visit-20261014"></script>
     <script src="../../scripts/components/inventory-money-input.js?v=20261013-clinic-services"></script>
-    <script src="../../scripts/components/admin-clinic-shell.js?v=20261015-imaging-v2&case-flow=20261013-v5&unified-cases=20261014"></script>
+    <script src="../../scripts/components/admin-clinic-shell.js?services=20261017&v=20261015-imaging-v2&case-flow=20261013-v5&unified-cases=20261014"></script>
     <script src="https://unpkg.com/alpinejs@3.x.x/dist/cdn.min.js" defer></script>
   </body>
 </html>

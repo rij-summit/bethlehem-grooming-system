@@ -10,7 +10,7 @@ function setup(permissions = {services_view: true, services_manage: true}) {
   let failMarkup = false;
   const context = {
     URLSearchParams, clearTimeout, setTimeout, console,
-    location: {hash: '#services'}, history: {replaceState(_, __, hash) {context.location.hash = hash;}},
+    location: {hash: '#clinic', replace(url) {calls.push(['redirect', url]);}}, history: {replaceState(_, __, hash) {context.location.hash = hash;}},
     scrollTo() {}, addEventListener: (name, listener) => listeners.set(name, listener),
     removeEventListener: name => listeners.delete(name),
     adminClinicPage: () => ({tab: 'active-cases', init() {calls.push('cases:init');}, loadAllRecords() {calls.push('records:load');}}),
@@ -25,17 +25,21 @@ function setup(permissions = {services_view: true, services_manage: true}) {
       calls.push('services:script');
       vm.runInContext(read('scripts/components/admin-clinic-services.js'), context);
       queueMicrotask(script.onload);
-    }}, createElement: () => ({style: {}, setAttribute() {}, remove() {}})},
-    Alpine: {mutateDom: fn => fn(), initTree(panel) {panel.state = component(context);}, $data: panel => panel.state},
+    }}, createElement: () => ({style: {}, kind: '', setAttribute(name, value) {if (name === 'x-data') this.kind = value;}, querySelector: () => null, remove() {}})},
+    Alpine: {mutateDom: fn => fn(), initTree(panel) {panel.state = panel.kind === 'adminClinicServices()' ? component(context) : {activate() {}, closeEditor() {}};}, $data: panel => panel.state},
     clinicAccess,
   };
   context.window = context;
   vm.createContext(context);
   vm.runInContext(read('scripts/components/admin-clinic-shell.js'), context);
-  const shell = context.adminClinicShell();
+  vm.runInContext(read('scripts/components/admin-clinic-services.js'), context);
+  vm.runInContext(read('scripts/components/admin-services.js'), context);
+  const shell = context.adminServices();
+  shell.showSection = async () => {await clinicAccess.init(); shell.canViewClinic = !!clinicAccess.permissions.services_view; shell.isAdmin = context.API.getUserRole() === 'admin'; return shell.showTab();};
   shell.$store = {clinicAccess};
   const cases = {state: context.adminClinicCasesSection()};
-  shell.$refs = {cases: {firstElementChild: cases}, services: {get firstElementChild() {return panels[0];}, appendChild: panel => panels.push(panel)}};
+  const groomingPanels = [];
+  shell.$refs = {cases: {firstElementChild: cases}, clinic: {get firstElementChild() {return panels[0];}, appendChild: panel => panels.push(panel)}, grooming: {get firstElementChild() {return groomingPanels[0];}, appendChild: panel => groomingPanels.push(panel)}};
   shell.$nextTick = fn => fn();
   return {context, shell, calls, panels, listeners, failMarkup: value => {failMarkup = value;},
     visit: async hash => {context.location.hash = hash; await shell.showSection();}};
@@ -52,43 +56,34 @@ function component(context) {
 
 async function navigation() {
   const app = setup();
-  await app.shell.init();
-  // init's nextTick callback is intentionally asynchronous, as in Alpine.
-  await app.shell.showSection();
-  assert.equal(app.calls.includes('cases:init'), false, 'Direct Services visits must not initialize Cases');
-  assert.equal(app.panels.length, 1, 'Concurrent activation mounts only one partial');
-  assert.equal(app.calls.filter(call => Array.isArray(call) && call[1].startsWith('/admin/clinic-services?')).length, 1, 'Concurrent activation fetches the catalog once');
+  await Promise.all([app.shell.showSection(), app.shell.showSection()]);
+  assert.equal(app.calls.includes('cases:init'), false, 'Services does not initialize Cases');
+  assert.equal(app.panels.length, 1, 'Concurrent activation mounts one partial');
+  assert.equal(app.calls.filter(call => Array.isArray(call) && call[1].startsWith('/admin/clinic-services?')).length, 1);
   const services = app.panels[0].state;
-  const beforeReturn = app.calls.length;
-  services.openDetails({id: 1, name: 'CBC'}, {currentTarget: {focus() {}}});
   services.q = 'CBC';
-  await app.visit('#cases');
-  assert.equal(services.$refs.detailsDialog.open, false, 'Leaving Services closes its details dialog');
-  await app.visit('#services');
-  await app.visit('#cases');
-  assert.equal(app.calls.filter(call => call === 'cases:init').length, 1);
-  assert.equal(app.calls.length, beforeReturn + 1, 'Cached navigation runs only the first Cases initialization');
+  services.openDetails({id: 1, name: 'CBC'}, {currentTarget: {focus() {}}});
+  await app.visit('#grooming');
+  assert.equal(services.$refs.detailsDialog.open, false);
+  await app.visit('#clinic');
   assert.equal(app.panels[0].state, services);
-  assert.equal(services.q, 'CBC', 'Cached section preserves filters');
-  await app.visit('#unknown');
-  assert.equal(app.context.location.hash, '#cases');
-  await app.visit('#records');
-  assert.equal(app.shell.activeSection, 'cases');
-  assert.equal(app.context.location.hash, '#cases', 'Legacy Records links normalize to Cases');
-  assert.equal(app.context.document.title, 'Clinic Cases | Bethlehem Animal Clinic');
-  await app.visit('#cases');
-  await app.visit('#records');
-  assert.equal(app.calls.filter(call => call === 'records:load').length, 0, 'The shell no longer has a separate Records activation');
-  assert.equal(app.calls.filter(call => call === 'cases:init').length, 1, 'Records reuse the Clinic workspace');
-  app.shell.destroy();
-  assert.equal(app.listeners.has('hashchange'), false);
+  assert.equal(services.q, 'CBC', 'Switching tabs preserves Clinic filters');
+  const legacy = app.context.adminClinicShell();
+  legacy.$store = {clinicAccess: app.context.clinicAccess};
+  legacy.$refs = {cases: {firstElementChild: {state: app.context.adminClinicCasesSection()}}};
+  app.context.location.hash = '#services';
+  await legacy.showSection();
+  assert.ok(app.calls.some(call => call[0] === 'redirect' && call[1] === './services.html#clinic'));
+  app.context.location.hash = '#cases';
+  await legacy.showSection(); await legacy.showSection();
+  assert.equal(app.calls.filter(call => call === 'cases:init').length, 1, 'Clinic cases still initialize once');
   const retry = setup();
   retry.failMarkup(true);
   await retry.shell.showSection();
-  assert.match(retry.shell.sectionError, /Unable to load/);
+  assert.match(retry.shell.error, /Unable to load/);
   retry.failMarkup(false);
   await retry.shell.showSection();
-  assert.equal(retry.shell.sectionError, '');
+  assert.equal(retry.shell.error, '');
   assert.equal(retry.panels.length, 1);
 }
 
@@ -167,7 +162,7 @@ async function readOnlyAccess() {
     const app = setup({services_view: true, services_manage: false});
     app.context.API.getUserRole = () => 'staff';
     await app.shell.showSection();
-    assert.equal(app.shell.activeSection, 'services', subrole + ' can open Services directly');
+    assert.equal(app.shell.activeTab, 'clinic', subrole + ' can open Services directly');
     const state = app.panels[0].state;
     assert.equal(state.canManageServices, false);
     state.q = 'CBC'; state.category = '2'; state.status = 'all';
@@ -182,7 +177,7 @@ async function readOnlyAccess() {
   }
   const denied = setup({services_view: false, services_manage: false});
   await denied.shell.showSection();
-  assert.equal(denied.shell.activeSection, 'cases');
+  assert.match(denied.shell.error, /do not have access/);
   assert.equal(denied.panels.length, 0);
   const page = read('pages/admin/clinic/sections/services.html');
   for (const action of ['openModal()', 'openModal(service)', 'changeStatus(service)']) {
@@ -191,18 +186,18 @@ async function readOnlyAccess() {
   }
   assert.ok(page.includes('View clinic services and pricing.'));
   assert.ok(page.includes('View Details'));
-  assert.ok(read('scripts/components/admin-sidebar.js').includes("child.setAttribute('x-show', 'clinicPermissions.services_view')"));
+  assert.ok(read('scripts/components/admin-sidebar.js').includes("services.setAttribute('x-show', 'isAdmin || clinicPermissions.services_view')"));
 
   const pending = setup({});
   let finishIdentity;
   pending.context.clinicAccess.init = () => new Promise(resolve => {finishIdentity = resolve;});
   const opening = pending.shell.showSection();
-  assert.equal(pending.context.location.hash, '#services', 'Do not redirect while permissions are loading');
+  assert.equal(pending.context.location.hash, '#clinic', 'Do not redirect while permissions are loading');
   assert.equal(pending.panels.length, 0);
   pending.context.clinicAccess.permissions = {services_view: true, services_manage: false};
   finishIdentity();
   await opening;
-  assert.equal(pending.shell.activeSection, 'services');
+  assert.equal(pending.shell.activeTab, 'clinic');
 }
 
 function formatting() {
@@ -331,7 +326,7 @@ async function confirmationDismissal() {
   const stores = {};
   const context = {document: {addEventListener: (_, callback) => callback()}, Alpine: {store: (name, store) => {stores[name] = store;}}};
   vm.createContext(context);
-  vm.runInContext(read('scripts/components/admin-clinic.js'), context);
+  vm.runInContext(read('scripts/components/clinic-feedback.js'), context);
   const feedback = stores.clinicFeedback;
   let answer = feedback.confirm({title: 'Service status', dismissOnEscape: false});
   assert.equal(feedback.dialog.dismissOnEscape, false);

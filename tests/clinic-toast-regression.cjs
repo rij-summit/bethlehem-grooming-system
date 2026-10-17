@@ -12,7 +12,7 @@ const context = {
   clearTimeout(id) {timers.delete(id);},
 };
 vm.createContext(context);
-for (const file of ['admin-clinic.js', 'admin-vaccinations.js']) {
+for (const file of ['clinic-feedback.js', 'admin-clinic.js', 'admin-vaccinations.js']) {
   vm.runInContext(fs.readFileSync(path.join(__dirname, '../scripts/components', file), 'utf8'), context);
 }
 

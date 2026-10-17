@@ -14,7 +14,7 @@ class GroomingServicePriceResolver
         $catalog = config("grooming_services.services.{$service->slug}", []);
         if ($service->starting_price_sizes !== null) {
             $price = $this->servicePrice($service, $petSize);
-            if (($catalog['kind'] ?? null) === 'package') {
+            if ($service->kind === 'package') {
                 $maximum = ($service->range_price_maximums ?? [])[$this->normalizeSize($petSize)] ?? null;
                 if ($this->isPositive($maximum)) {
                     return ['min' => $price, 'max' => $this->normalizeMoney($maximum)];
@@ -61,7 +61,7 @@ class GroomingServicePriceResolver
         $catalog = $service ? config("grooming_services.services.{$service->slug}", []) : [];
         $size = $this->normalizeSize($petSize);
         $bookedSize = $this->normalizeSize($line->bookingPet?->confirmed_size ?? $line->bookingPet?->registered_size);
-        $sizeChanged = ($catalog['kind'] ?? null) === 'package' && $size !== $bookedSize;
+        $sizeChanged = $service?->kind === 'package' && $size !== $bookedSize;
         $minimum = $line->price_min_at_booking;
         $maximum = $line->price_max_at_booking;
         // Older lines predate bounds snapshots. Recover their original rule from
@@ -94,13 +94,13 @@ class GroomingServicePriceResolver
         $safetyMaximum = null;
         $reviewThreshold = null;
         if ($pricingType === 'plus') {
-            if (($catalog['kind'] ?? null) === 'package') {
+            if ($service?->kind === 'package') {
                 $safetyMaximum = $this->normalizeMoney((float) $minimum + 500);
                 $startingSizes = $service->starting_price_sizes ?? $catalog['starting_sizes'] ?? [];
                 if ($size === 'large' && in_array('extra_large', $startingSizes, true)) {
                     $reviewThreshold = $this->servicePrice($service, 'extra_large');
                 }
-            } elseif (($catalog['kind'] ?? null) === 'ala_carte') {
+            } elseif ($service?->kind === 'ala_carte') {
                 $safetyMaximum = $this->normalizeMoney((float) $minimum + 200);
             }
         }
@@ -125,7 +125,7 @@ class GroomingServicePriceResolver
         $catalog = config("grooming_services.services.{$service->slug}");
 
         if ($service->starting_price_sizes !== null) {
-            if (($catalog['kind'] ?? null) === 'package') {
+            if ($service->kind === 'package') {
                 return $this->normalizeMoney($this->databasePackagePrice($service, $size) ?? $service->base_price);
             }
             return $this->normalizeMoney($service->price_min ?? $service->base_price);
@@ -137,7 +137,7 @@ class GroomingServicePriceResolver
                 ? $service->price_min : $catalog['minimum']);
         }
 
-        if (($catalog['kind'] ?? null) === 'package') {
+        if ($service->kind === 'package') {
             $databasePrice = $this->databasePackagePrice($service, $size);
             if ($this->isPositive($databasePrice)) {
                 return $this->normalizeMoney($databasePrice);

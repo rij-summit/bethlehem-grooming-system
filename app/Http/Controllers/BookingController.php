@@ -671,7 +671,7 @@ class BookingController extends Controller
         });
         $booking->bookingServices->each(function ($item) {
             if ($item->service) {
-                $item->service->setAttribute('kind', config('grooming_services.services.'.$item->service->slug.'.kind'));
+                $item->service->setAttribute('kind', $item->service->kind);
             }
         });
         $booking->setAttribute('consent', $booking->groomingConsent);

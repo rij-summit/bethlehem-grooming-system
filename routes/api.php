@@ -74,6 +74,10 @@ Route::get('/system/clock', function () {
 // ── PROTECTED ROUTES (token required) ────────────────
 Route::middleware(['auth:sanctum', 'account.usable'])->group(function () {
     Route::get('/grooming/services', [GroomingPricingController::class, 'index']);
+    Route::get('/admin/grooming/services', [GroomingPricingController::class, 'managedIndex'])->middleware('role:admin');
+    Route::post('/admin/grooming/services', [GroomingPricingController::class, 'store'])->middleware('role:admin');
+    Route::put('/admin/grooming/services/{service}', [GroomingPricingController::class, 'save'])->middleware('role:admin');
+    Route::patch('/admin/grooming/services/{service}/status', [GroomingPricingController::class, 'status'])->middleware('role:admin');
     Route::get('/grooming/pet-groomers', [\App\Http\Controllers\PetGroomerController::class, 'index']);
     Route::patch('/admin/grooming/services/{service}/pricing', [GroomingPricingController::class, 'update'])->middleware('role:admin');
 

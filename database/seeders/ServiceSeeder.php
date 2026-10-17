@@ -114,12 +114,27 @@ class ServiceSeeder extends Seeder
             ],
         ];
 
+        $managed = \Illuminate\Support\Facades\Schema::hasColumn('services', 'kind');
+        $metadata = collect(json_decode(file_get_contents(database_path('data/grooming-catalog.json')), true))->keyBy('id');
         foreach ($services as $service) {
             $service['starting_price_sizes'] = json_encode(
                 config("grooming_services.services.{$service['slug']}.starting_sizes", []),
             );
             // Re-seeding must not overwrite administrator-managed catalogue prices.
             DB::table('services')->insertOrIgnore(array_merge($service, ['is_active' => true]));
+        }
+        if ($managed) {
+            $ids = DB::table('services')->pluck('service_id', 'slug');
+            foreach ($metadata as $slug => $defaults) {
+                DB::table('services')->where('slug', $slug)->whereNull('kind')->update([
+                    'kind' => $defaults['kind'], 'pet_type' => $defaults['petType'] ?? 'all',
+                    'description_items' => json_encode($defaults['descriptionItems']),
+                    'included_ala_carte_ids' => json_encode(array_values(array_filter(array_map(
+                        fn ($slug) => $ids[$slug] ?? null, $defaults['includedAlaCarteServiceIds'] ?? [],
+                    )))),
+                    'display_order' => $metadata->keys()->search($slug),
+                ]);
+            }
         }
     }
 }
