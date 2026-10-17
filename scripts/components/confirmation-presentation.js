@@ -49,16 +49,10 @@ export function readConfirmationData(key) {
   catch { return null; }
 }
 
-export function renderConfirmation(root, {
-  title, message, printTitle, reference, status, walkIn = false, queueNumber,
-  sections, primaryHref, primaryLabel, warning = "",
+export function confirmationDocument({
+  message, printTitle, reference, status, walkIn = false, queueNumber, sections, warning = "",
 }) {
-  root.innerHTML = `
-    <header class="confirmation-success">
-      <span class="confirmation-success-mark" aria-hidden="true">✓</span>
-      <h1 id="confirmationHeading" tabindex="-1" aria-describedby="confirmationOutcomeStatus confirmationOutcomeMessage">${escapeHtml(title)}</h1>
-    </header>
-    <article class="confirmation-document" aria-label="Confirmation details">
+  return `<article class="confirmation-document" aria-label="Confirmation details">
       <header class="confirmation-brand-header">
         <div class="brand-lockup" role="img" aria-label="Bethlehem Animal Clinic">
           <img src="../../assets/images/clinic/Bethlehem_Logo-256.png" alt="" class="brand-lockup__mark" />
@@ -75,10 +69,20 @@ export function renderConfirmation(root, {
         <dl class="confirmation-reference"><dt>Reference No.</dt><dd>${escapeHtml(reference || "Not available")}</dd></dl>
         <span id="confirmationOutcomeStatus" class="confirmation-badge${walkIn ? " confirmation-badge--checked-in" : ""}" role="status">${escapeHtml(status)}</span>
       </div>
-      <p id="confirmationOutcomeMessage" class="confirmation-message">${escapeHtml(message)}</p>
+      ${message ? `<p id="confirmationOutcomeMessage" class="confirmation-message">${escapeHtml(message)}</p>` : ""}
       ${warning ? `<p class="confirmation-warning" role="status">${escapeHtml(warning)}</p>` : ""}
       ${sections}
-    </article>
+    </article>`;
+}
+
+export function renderConfirmation(root, options) {
+  const { title, primaryHref, primaryLabel } = options;
+  root.innerHTML = `
+    <header class="confirmation-success">
+      <span class="confirmation-success-mark" aria-hidden="true">✓</span>
+      <h1 id="confirmationHeading" tabindex="-1" aria-describedby="confirmationOutcomeStatus confirmationOutcomeMessage">${escapeHtml(title)}</h1>
+    </header>
+    ${confirmationDocument(options)}
     <div class="confirmation-actions">
       <a class="confirmation-button confirmation-button--primary" href="${escapeHtml(primaryHref)}">${escapeHtml(primaryLabel)}</a>
       <button class="confirmation-button" id="printConfirmationButton" type="button">Print Confirmation</button>
@@ -87,16 +91,18 @@ export function renderConfirmation(root, {
   document.body.classList.add("confirmation-ready");
   document.title = title;
   root.querySelector("#confirmationHeading").focus({ preventScroll: true });
-  root.querySelector("#printConfirmationButton").addEventListener("click", () => {
-    const originalTitle = document.title;
-    const restoreTitle = () => {
-      document.title = originalTitle;
-      window.removeEventListener("afterprint", restoreTitle);
-    };
-    // Retain the existing Grooming behavior for browser-generated print headers.
-    document.title = "\u200B";
-    window.addEventListener("afterprint", restoreTitle);
-    window.print();
-    window.setTimeout(restoreTitle, 1000);
-  });
+  root.querySelector("#printConfirmationButton").addEventListener("click", () => printConfirmation());
+}
+
+export function printConfirmation() {
+  const originalTitle = document.title;
+  const restoreTitle = () => {
+    document.title = originalTitle;
+    window.removeEventListener("afterprint", restoreTitle);
+  };
+  // Retain the existing Grooming behavior for browser-generated print headers.
+  document.title = "\u200B";
+  window.addEventListener("afterprint", restoreTitle);
+  window.print();
+  window.setTimeout(restoreTitle, 1000);
 }

@@ -846,6 +846,7 @@ function scheduleCustomerDashboardAfterPaint(task) {
         <p class="mt-1 text-sm text-portal-text">${escapeDashboardHtml(serviceLabel(booking))}</p>
         <p class="mt-1 text-sm text-portal-muted">${formatDate(booking.booking_date)} · ${escapeDashboardHtml(booking.time_window?.window_label || "Time to be confirmed")}</p>
         <span class="mt-2 inline-flex rounded-full px-2.5 py-1 text-[11px] font-semibold ${status.classes}">${escapeDashboardHtml(status.label)}</span>
+        <div>${visitSummaryAction(booking, "View drop-off summary")}</div>
       </div>
       ${actionable ? `<div class="flex flex-wrap gap-2 max-[639px]:basis-full">
         <button type="button" id="reschedule-${escapeDashboardHtml(booking.booking_id)}" class="portal-button-secondary min-h-10 whitespace-nowrap px-3 py-2 text-xs" aria-label="Reschedule ${escapeDashboardHtml(names)}">Reschedule</button>
@@ -855,6 +856,25 @@ function scheduleCustomerDashboardAfterPaint(task) {
   }
 
   // ── Grooming Tracker section ───────────────────────────────────────────────
+
+  function visitSummaryAction(booking, label) {
+    return `<button type="button" id="visit-summary-${escapeDashboardHtml(booking.booking_id)}" data-visit-summary="${escapeDashboardHtml(booking.booking_id)}" class="grooming-summary-action" aria-haspopup="dialog">${label}<span class="sr-only"> for ${escapeDashboardHtml(getPetNamesLabel(booking))}</span></button>`;
+  }
+
+  async function openVisitSummary(event) {
+    const trigger = event.target.closest("[data-visit-summary]");
+    if (!trigger) return;
+    const { openGroomingVisitSummary } = await import("./grooming-visit-summary.js?v=20261017");
+    openGroomingVisitSummary(trigger.dataset.visitSummary, trigger, (booking) => {
+      if (isUpcomingAppointment(booking)) return getStatusConfig("waiting_to_arrive").label;
+      if (!["checked_in", "in_progress", "for_payment", "released"].includes(booking.status)) return getStatusConfig(booking.status).label;
+      const statuses = trackerPets(booking).map((pet) => getTrackerPetStatus(pet, booking));
+      return getStatusConfig(trackerVisitStatus(statuses)).label;
+    });
+  }
+
+  appointmentsList.addEventListener("click", openVisitSummary);
+  groomingTrackerEl.addEventListener("click", openVisitSummary);
 
   function renderGroomingCapacity(data) {
     groomingQueueLoadingEl?.classList.add("hidden");
@@ -943,6 +963,12 @@ function scheduleCustomerDashboardAfterPaint(task) {
     document.getElementById(button.id)?.focus({ preventScroll: true });
   });
 
+  function trackerVisitStatus(statuses) {
+    const ready = statuses.filter((status) => ["for_payment", "released"].includes(status)).length;
+    return ready === statuses.length ? "for_payment"
+      : ready || statuses.some((status) => ["in_progress", "grooming_finished"].includes(status)) ? "in_progress" : "checked_in";
+  }
+
   function renderGroomingTracker(bookings) {
     trackerVisits = bookings;
     const metadataMarkup = bookings.length ? buildTrackerMetadata(bookings[0]) : "";
@@ -988,8 +1014,7 @@ function scheduleCustomerDashboardAfterPaint(task) {
     const grooming = statuses.filter((status) => status === "in_progress").length;
     const finished = statuses.filter((status) => status === "grooming_finished").length;
     const waiting = pets.length - ready - grooming - finished;
-    const status = ready === pets.length ? "for_payment"
-      : grooming || finished || ready ? "in_progress" : "checked_in";
+    const status = trackerVisitStatus(statuses);
     const current = { checked_in: 0, in_progress: 1, for_payment: 2 }[status];
     const config = getStatusConfig(status);
     let summary;
@@ -1038,6 +1063,7 @@ function scheduleCustomerDashboardAfterPaint(task) {
           <button id="tracker-toggle-${id}" type="button" data-tracker-toggle="${id}" aria-controls="tracker-pets-${id}" aria-expanded="${expanded}" class="portal-button-secondary px-4">${expanded ? "Show fewer" : `Show all ${pets.length} pets`}</button>
         </div>` : ""}
         <ol class="mt-6 grid grid-cols-3" aria-label="Queue status for this grooming visit">${steps}</ol>
+        <div class="mt-3">${visitSummaryAction({ ...booking, pets }, "View visit details")}</div>
     </article>`;
   }
 
@@ -1102,8 +1128,8 @@ function scheduleCustomerDashboardAfterPaint(task) {
 
   function getStatusConfig(status) {
     const map = {
-      waiting_to_arrive: { label: "Waiting",           classes: "bg-portal-active text-portal-primary" },
-      waiting:           { label: "Waiting", classes: "bg-portal-active text-portal-primary" },
+      waiting_to_arrive: { label: "Waiting to arrive", classes: "bg-portal-active text-portal-primary" },
+      waiting:           { label: "Waiting to arrive", classes: "bg-portal-active text-portal-primary" },
       grooming_finished: { label: "Grooming finished", classes: "bg-portal-success-soft text-portal-success" },
       checked_in:        { label: "Checked In",         classes: "bg-portal-warning-soft text-portal-warning" },
       in_progress:       { label: "Grooming in Progress",        classes: "bg-portal-warning-soft text-portal-warning" },

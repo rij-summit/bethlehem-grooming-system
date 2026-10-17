@@ -441,7 +441,29 @@ async function testTrackerDisclosureAndPrioritySurviveRefresh() {
   assert.equal(dashboard.consoleErrors.length, 0);
 }
 
+async function testVisitSummaryFollowsVisitState() {
+  let booking = { booking_id: 701, status: "waiting_to_arrive", pets: [{ pet_name: "Coco" }] };
+  const dashboard = await runDashboard(async () => ({ bookings: [booking], history: [] }));
+  assert.match(dashboard.element("appointmentsList").innerHTML, /View drop-off summary/);
+  assert.match(dashboard.element("appointmentsList").innerHTML, /Waiting to arrive/);
+  assert.match(dashboard.element("appointmentsList").innerHTML, /Reschedule[\s\S]*Cancel/);
+  assert.doesNotMatch(dashboard.element("groomingTracker").innerHTML, /View visit details/);
+  for (const status of ["checked_in", "in_progress", "for_payment", "released"]) {
+    booking.status = status;
+    await dashboard.refresh();
+    assert.doesNotMatch(dashboard.element("appointmentsList").innerHTML, /Coco|View drop-off summary/);
+    assert.match(dashboard.element("groomingTracker").innerHTML, /View visit details/);
+  }
+  booking.show_grooming_tracker = false;
+  await dashboard.refresh();
+  assert.doesNotMatch(dashboard.element("groomingTracker").innerHTML, /View visit details/);
+  booking = { ...booking, status: "archived" };
+  await dashboard.refresh();
+  assert.doesNotMatch(dashboard.element("appointmentsList").innerHTML, /Coco/);
+}
+
 (async () => {
+  await testVisitSummaryFollowsVisitState();
   await testTrackerOverallStateAndIndividualCards();
   await testTrackerDisclosureAndPrioritySurviveRefresh();
   await testExpiredRegistrationsHaveNeutralHistoryLabels();

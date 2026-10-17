@@ -654,7 +654,8 @@ class BookingController extends Controller
     {
         $booking = Booking::where('booking_id', $id)
             ->where('user_id', $request->user()->user_id)
-            ->with(['timeWindow', 'bookingPets.pet', 'bookingPets.groomer'])
+            ->with(['timeWindow', 'bookingPets.pet', 'bookingPets.groomer', 'bookingServices.service',
+                'groomingConsent:booking_id,grooming_consent,sedation_consent,signer_name,signed_at'])
             ->first();
 
         if (! $booking) {
@@ -665,6 +666,16 @@ class BookingController extends Controller
         }
 
         $booking->setRelation('timeWindow', $booking->preferredArrivalWindow());
+        $booking->bookingPets->each(function ($pet) {
+            $pet->setAttribute('grooming_estimate', app(\App\Services\GroomingTimeEstimate::class)->forVisit($pet));
+        });
+        $booking->bookingServices->each(function ($item) {
+            if ($item->service) {
+                $item->service->setAttribute('kind', config('grooming_services.services.'.$item->service->slug.'.kind'));
+            }
+        });
+        $booking->setAttribute('consent', $booking->groomingConsent);
+        $booking->unsetRelation('groomingConsent');
 
         return response()->json([
             'success' => true,

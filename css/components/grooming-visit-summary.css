@@ -1,0 +1,60 @@
+/* Hallmark support: existing Bethlehem portal tokens and component hierarchy.
+ * Pre-emit critique: Philosophy 5, Hierarchy 5, Execution 4, Specificity 5, Restraint 5, Variety 4. */
+.grooming-summary-action {
+  display: inline-block; padding: .5rem 0; border: 0; background: transparent;
+  color: var(--portal-primary); font-size: .75rem; font-weight: 600; cursor: pointer;
+}
+.grooming-summary-action:hover { text-decoration: underline; }
+.grooming-summary-action:active { color: var(--portal-primary-hover); }
+.grooming-summary-action:focus-visible, .grooming-summary-dialog button:focus-visible {
+  outline: 3px solid var(--portal-primary); outline-offset: 3px;
+}
+body.grooming-summary-open { overflow: hidden; }
+.grooming-summary-dialog {
+  width: min(44rem, calc(100% - 2rem)); max-width: none; max-height: calc(100dvh - 2rem);
+  margin: auto; padding: 0; border: 1px solid var(--portal-border); border-radius: 24px;
+  overflow: hidden;
+  background: var(--portal-surface); color: var(--portal-text); box-shadow: var(--portal-shadow);
+}
+.grooming-summary-dialog::backdrop { background: rgb(15 23 42 / .5); }
+.grooming-summary-shell { display: flex; flex-direction: column; max-height: calc(100dvh - 2rem - 2px); }
+.grooming-summary-heading, .grooming-summary-footer {
+  display: flex; align-items: center; gap: 1rem; flex: none; padding: 1rem 1.5rem;
+}
+.grooming-summary-heading { justify-content: space-between; border-bottom: 1px solid var(--portal-border); }
+.grooming-summary-heading h2 { font-size: 1.125rem; font-weight: 700; line-height: 1.3; }
+.grooming-summary-close {
+  display: grid; place-items: center; flex: none; width: 2.5rem; height: 2.5rem;
+  border-radius: 50%; color: var(--portal-muted); background: transparent; cursor: pointer;
+}
+.grooming-summary-close:hover { background: var(--portal-active); color: var(--portal-text); }
+.grooming-summary-content { min-height: 0; overflow-y: auto; overscroll-behavior: contain; padding: 1.25rem 1.5rem; font-size: .875rem; }
+.grooming-summary-content :is(h3, p, dl, dd) { margin: 0; }
+.grooming-summary-content :is(p, dd, h3) { overflow-wrap: anywhere; }
+.grooming-summary-content h3 { font-size: 1.125rem; font-weight: 700; }
+.grooming-summary-overview { display: flex; flex-wrap: wrap; align-items: center; gap: .5rem 1rem; padding-bottom: 1rem; }
+.grooming-summary-overview > :is(p, dl) { flex-basis: 100%; }
+.grooming-summary-overview > p { color: var(--portal-muted); }
+.grooming-summary-status { border-radius: 999px; padding: .25rem .625rem; background: var(--portal-active); color: var(--portal-primary); font-size: .75rem; font-weight: 600; }
+.grooming-summary-content .confirmation-fields { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: .75rem 1.25rem; }
+.grooming-summary-content dt { color: var(--portal-muted); font-size: .75rem; }
+.grooming-summary-content dd { margin-top: .25rem; white-space: pre-wrap; }
+.grooming-summary-content .confirmation-section { padding: 1rem 0; border-color: var(--portal-border); }
+.grooming-summary-content .confirmation-section h2 { margin-bottom: .75rem; color: var(--portal-text); font-size: .875rem; font-weight: 700; }
+.grooming-summary-pet + .grooming-summary-pet { padding-top: 1rem; border-top: 1px solid var(--portal-border); }
+.grooming-summary-total dd { font-size: 1.125rem; font-weight: 700; }
+.grooming-summary-total .confirmation-estimate-note { margin-top: .5rem; color: var(--portal-muted); }
+.grooming-summary-footer { justify-content: flex-end; border-top: 1px solid var(--portal-border); }
+.grooming-summary-footer button { white-space: nowrap; }
+.grooming-summary-footer button:disabled { opacity: .5; cursor: not-allowed; }
+@media (max-width: 479px) {
+  .grooming-summary-heading, .grooming-summary-footer, .grooming-summary-content { padding: 1rem; }
+  .grooming-summary-content .confirmation-fields { grid-template-columns: minmax(0, 1fr); }
+  .grooming-summary-footer { flex-direction: column-reverse; gap: .75rem; }
+  .grooming-summary-footer button { width: 100%; }
+}
+@media print {
+  body.grooming-summary-printing > :not(#groomingVisitPrint) { display: none !important; }
+  body.grooming-summary-printing { overflow: visible; }
+  body.grooming-summary-printing > #groomingVisitPrint { display: block !important; }
+}
