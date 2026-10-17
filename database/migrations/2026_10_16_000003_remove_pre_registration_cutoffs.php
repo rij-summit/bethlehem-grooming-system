@@ -16,7 +16,7 @@ return new class extends Migration
         Schema::table('bookings', function (Blueprint $table) {
             $table->time('arrival_end_time')->nullable();
         });
-        app(AvailabilityTimeWindowService::class)->sync(ClinicSetting::current());
+        app(AvailabilityTimeWindowService::class)->sync(ClinicSetting::query()->findOrFail(ClinicSetting::SINGLETON_ID));
     }
 
     public function down(): void

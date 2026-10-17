@@ -8,7 +8,7 @@ return new class extends Migration
 {
     public function up(): void
     {
-        app(AvailabilityTimeWindowService::class)->sync(ClinicSetting::current());
+        app(AvailabilityTimeWindowService::class)->sync(ClinicSetting::query()->findOrFail(ClinicSetting::SINGLETON_ID));
     }
 
     public function down(): void
