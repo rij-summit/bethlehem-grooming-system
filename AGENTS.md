@@ -162,6 +162,45 @@ For multi-step tasks, state a brief plan:
 
 Strong success criteria let you loop independently within the approved task scope. Weak criteria ("make it work") may require clarification.
 
+## 9. Debugging and Regression Skills
+
+**Find the root cause before changing behavior. Preserve meaningful regression coverage.**
+
+For bugs, failing tests, regressions, build failures, migration failures,
+unexpected runtime behavior, or integration failures, use the
+`systematic-debugging` skill when relevant.
+
+During debugging:
+
+- Reproduce the failure before attempting a fix whenever practical.
+- Determine whether the root cause is production code, test setup, mocks or
+  fixtures, environment/configuration, dependency state, migrations, or a
+  stale/brittle assertion.
+- Fix the root cause rather than weakening production behavior or changing an
+  assertion only to make a test pass.
+- Do not delete, skip, or relax a failing test unless its expectation is proven
+  obsolete, duplicated, or incorrect.
+- Use the smallest relevant test or reproduction while investigating. Broaden
+  verification only when dependencies, integration risk, or the task scope
+  warrants it.
+
+When systematic debugging confirms an actual application behavior defect,
+use the `test-driven-development` skill when practical:
+
+- Create or update a focused regression test that reproduces the defect.
+- Confirm the test fails for the expected reason before changing production logic.
+- Apply the smallest correct production fix.
+- Confirm the regression test passes afterward.
+- Run the additional relevant checks required by the affected scope.
+
+TDD is not required for purely visual CSS/layout changes, copy changes,
+generated files, or configuration-only edits unless the task is correcting
+testable behavior or a regression.
+
+Do not create superficial source-string, markup-presence, or implementation-detail
+tests solely to satisfy TDD. Prefer observable behavior and the project's existing
+test conventions.
+
 ---
 
 *These guidelines are working if:* fewer unnecessary changes in diffs, fewer rewrites due to overcomplication, and clarifying questions come before implementation rather than after mistakes.
